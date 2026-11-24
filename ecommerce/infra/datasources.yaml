@@ -1,0 +1,6 @@
+default:
+  dialect: sqlite
+  file: data/ecommerce.db
+postgres:
+  dialect: postgresql
+  connectionEnv: KARU_POSTGRES_CONNECTION

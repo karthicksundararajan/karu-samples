@@ -1,0 +1,29 @@
+# .NET build output and local package caches
+bin/
+obj/
+packages/
+.packages/
+
+# Runtime data and test artifacts
+data/
+TestResults/
+playwright-report/
+test-results/
+*.log
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+
+# Editor and operating system files
+*.user
+*.suo
+.vs/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Python caches
+__pycache__/
+*.py[cod]

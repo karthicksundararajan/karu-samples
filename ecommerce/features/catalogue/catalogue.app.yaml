@@ -1,0 +1,292 @@
+entities:
+  Category:
+    fields:
+      name:
+        type: string
+        max: 120
+        required: true
+        unique: true
+      taxClass:
+        type: enum
+        required: true
+        values:
+        - Standard
+        - Reduced
+        - Special
+        default: Standard
+  Product:
+    fields:
+      sku:
+        type: string
+        max: 40
+        required: true
+        unique: true
+      name:
+        type: string
+        max: 200
+        required: true
+      category:
+        ref: Category
+        required: true
+      price:
+        type: decimal
+        required: true
+        min: 0
+        precision: 12
+        scale: 2
+      status:
+        type: enum
+        required: true
+        values:
+        - Draft
+        - Active
+        - Discontinued
+        default: Draft
+    rowFilter: VisibleProducts
+  Stock:
+    fields:
+      product:
+        ref: Product
+        required: true
+      stockKey:
+        type: string
+        max: 40
+        required: true
+        unique: true
+      onHand:
+        type: int
+        required: true
+        min: 0
+      reserved:
+        type: int
+        required: true
+        min: 0
+    rules:
+    - ValidStock
+  StockMovement:
+    fields:
+      stock:
+        ref: Stock
+        required: true
+      kind:
+        type: enum
+        required: true
+        values:
+        - Adjustment
+        - Reservation
+        - Release
+        - Sale
+        - Return
+        default: Adjustment
+      quantity:
+        type: int
+        required: true
+        min: -1000000
+      at:
+        type: datetime
+        required: true
+contracts:
+  VisibleProducts:
+    kind: rowFilter
+    entity: Product
+  ValidStock:
+    kind: rule
+    input: Stock
+  InitializeStock:
+    kind: eventHandler
+    event: ProductCreated
+  AdjustBalance:
+    kind: commandHandler
+    input: Stock
+    data:
+      creates:
+      - StockMovement
+  ReserveBalance:
+    kind: commandHandler
+    input: Stock
+    data:
+      creates:
+      - StockMovement
+  ReleaseBalance:
+    kind: commandHandler
+    input: Stock
+    data:
+      creates:
+      - StockMovement
+  ConsumeBalance:
+    kind: commandHandler
+    input: Stock
+    data:
+      creates:
+      - StockMovement
+  ReturnBalance:
+    kind: commandHandler
+    input: Stock
+    data:
+      creates:
+      - StockMovement
+stateMachines:
+  Product.status:
+    Draft:
+    - Active
+    Active:
+    - Discontinued
+commands:
+  CreateProduct:
+    'on': Product
+    kind: create
+    emits: ProductCreated
+  PublishProduct:
+    'on': Product
+    transition:
+      from: Draft
+      to: Active
+  DiscontinueProduct:
+    'on': Product
+    transition:
+      from: Active
+      to: Discontinued
+  AdjustStock:
+    'on': Stock
+    input:
+      quantity:
+        type: int
+        required: true
+        min: -1000000
+    handler: AdjustBalance
+  ReserveStock:
+    'on': Stock
+    input:
+      quantity:
+        type: int
+        required: true
+        min: 1
+    handler: ReserveBalance
+  ReleaseStock:
+    'on': Stock
+    input:
+      quantity:
+        type: int
+        required: true
+        min: 1
+    handler: ReleaseBalance
+  ConsumeStock:
+    'on': Stock
+    input:
+      quantity:
+        type: int
+        required: true
+        min: 1
+    handler: ConsumeBalance
+  ReturnStock:
+    'on': Stock
+    input:
+      quantity:
+        type: int
+        required: true
+        min: 1
+    handler: ReturnBalance
+events:
+  ProductCreated:
+    fields:
+      sku: string
+subscribers:
+- 'on': ProductCreated
+  handler: InitializeStock
+queries:
+  ProductById:
+    from: Product
+    select:
+    - id
+    params:
+      productId:
+        type: int
+        required: true
+    where:
+      id:
+        param: productId
+  CategoryById:
+    from: Category
+    select:
+    - id
+    params:
+      categoryId:
+        type: int
+        required: true
+    where:
+      id:
+        param: categoryId
+  StockByProduct:
+    from: Stock
+    select:
+    - id
+    params:
+      productId:
+        ref: Product
+        required: true
+    where:
+      product:
+        param: productId
+  PublishedProducts:
+    from: Product
+    select:
+    - id
+    - sku
+    - name
+    - price
+    where:
+      status: Active
+    orderBy:
+    - name
+permissions:
+  AdjustStock:
+  - Warehouse
+  - Admin
+  ReserveStock:
+  - System
+  ReleaseStock:
+  - System
+  ConsumeStock:
+  - System
+  ReturnStock:
+  - System
+  Category:
+    read:
+    - Customer
+    - CatalogueManager
+    - Warehouse
+    - Support
+    - Admin
+    create:
+    - CatalogueManager
+    - Admin
+    update:
+    - CatalogueManager
+    - Admin
+  Product:
+    read:
+    - Customer
+    - CatalogueManager
+    - Warehouse
+    - Support
+    - Admin
+    create:
+    - CatalogueManager
+    - Admin
+    update:
+    - CatalogueManager
+    - Admin
+  Stock:
+    read:
+    - Warehouse
+    - Admin
+  StockMovement:
+    read:
+    - Warehouse
+    - Admin
+  PublishProduct:
+  - CatalogueManager
+  - Admin
+  DiscontinueProduct:
+  - CatalogueManager
+  - Admin

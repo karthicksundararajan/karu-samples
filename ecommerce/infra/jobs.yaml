@@ -1,0 +1,12 @@
+jobs:
+  ExpireUnpaidOrders:
+    schedule:
+      cron: 0 * * * * ?
+    contract: ExpirePendingOrders
+contracts:
+  ExpirePendingOrders:
+    kind: job
+    queries:
+    - Sales.PendingOrders
+    commands:
+    - Sales.ExpireOrder

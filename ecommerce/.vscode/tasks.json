@@ -1,0 +1,16 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Karu: validate model",
+      "type": "process",
+      "command": "./tools/karu",
+      "args": [
+        "validate",
+        "."
+      ],
+      "group": "build",
+      "problemMatcher": []
+    }
+  ]
+}

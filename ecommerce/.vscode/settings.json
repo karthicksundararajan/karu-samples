@@ -1,0 +1,28 @@
+{
+  "yaml.schemas": {
+    "../../karu/schemas/manifest.schema.json": [
+      "**/app.yaml"
+    ],
+    "../../karu/schemas/app.schema.json": [
+      "**/*.app.yaml"
+    ],
+    "../../karu/schemas/scenarios.schema.json": [
+      "**/*.scenarios.yaml"
+    ],
+    "../../karu/schemas/datasources.schema.json": [
+      "infra/datasources.yaml"
+    ],
+    "../../karu/schemas/identity.schema.json": [
+      "infra/identity.yaml"
+    ],
+    "../../karu/schemas/connectors.schema.json": [
+      "infra/connectors.yaml"
+    ],
+    "../../karu/schemas/jobs.schema.json": [
+      "infra/jobs.yaml"
+    ]
+  },
+  "yaml.yamlVersion": "1.2",
+  "yaml.schemaStore.enable": false,
+  "yaml.kubernetesCRDStore.enable": false
+}

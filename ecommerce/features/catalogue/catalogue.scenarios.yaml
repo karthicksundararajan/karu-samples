@@ -1,0 +1,91 @@
+scenarios:
+- name: Catalogue managers can discontinue active products
+  given:
+    Category:
+    - name: Equipment
+    Product:
+    - sku: ITEM
+      name: Item
+      category: Equipment
+      price: '12.35'
+      status: Active
+  when:
+    command: DiscontinueProduct
+    'on': ITEM
+    as:
+      user: catalogue.dev
+  expect:
+    Product:
+    - sku: ITEM
+      status: Discontinued
+- name: Customers cannot publish products
+  given:
+    Category:
+    - name: Equipment
+    Product:
+    - sku: ITEM
+      name: Item
+      category: Equipment
+      price: '12.35'
+      status: Active
+  when:
+    command: PublishProduct
+    'on': ITEM
+    as:
+      user: alice.dev
+  expect:
+    forbidden: true
+- name: Stock adjustment cannot consume held inventory
+  given:
+    Category:
+    - name: Equipment
+    Product:
+    - sku: ITEM
+      name: Item
+      category: Equipment
+      price: '12.35'
+      status: Active
+    Stock:
+    - product: ITEM
+      stockKey: STOCK
+      onHand: 5
+      reserved: 4
+  when:
+    command: AdjustStock
+    'on': STOCK
+    input:
+      quantity: -2
+    as:
+      user: warehouse.dev
+  expect:
+    rejected: true
+    Stock:
+    - stockKey: STOCK
+      onHand: 5
+      reserved: 4
+    errors:
+    - field: onHand
+- name: Customers cannot reserve stock directly
+  given:
+    Category:
+    - name: Equipment
+    Product:
+    - sku: ITEM
+      name: Item
+      category: Equipment
+      price: '12.35'
+      status: Active
+    Stock:
+    - product: ITEM
+      stockKey: STOCK
+      onHand: 5
+      reserved: 0
+  when:
+    command: ReserveStock
+    'on': STOCK
+    input:
+      quantity: 1
+    as:
+      user: alice.dev
+  expect:
+    forbidden: true

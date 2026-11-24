@@ -1,0 +1,839 @@
+entities:
+  Cart:
+    aggregate: true
+    fields:
+      owner:
+        type: string
+        max: 300
+        required: false
+      customer:
+        ref: Customers.Customer
+        required: true
+      status:
+        type: enum
+        required: true
+        values:
+        - Open
+        - CheckedOut
+        default: Open
+      order:
+        ref: Order
+        required: false
+    children:
+      lines:
+        entity: CartLine
+        readonlyWhen:
+          status: CheckedOut
+    rowFilter: OwnCart
+  CartLine:
+    fields:
+      product:
+        ref: Catalogue.Product
+        required: true
+      quantity:
+        type: int
+        required: true
+        min: 1
+        max: 1000000
+  Order:
+    aggregate: true
+    fields:
+      owner:
+        type: string
+        max: 300
+        required: true
+      cartId:
+        type: string
+        max: 30
+        required: false
+        unique: true
+      checkoutKey:
+        type: string
+        max: 200
+        required: true
+        unique: true
+      customer:
+        ref: Customers.Customer
+        required: true
+      shipping:
+        value: Customers.Address
+        required: true
+      currency:
+        type: enum
+        required: true
+        values:
+        - CHF
+        default: CHF
+      pricesIncludeVAT:
+        type: bool
+        required: true
+        renamedFrom: pricesIncludeVat
+      subtotal:
+        type: decimal
+        required: true
+        min: 0
+        precision: 12
+        scale: 2
+      totalExclVAT:
+        type: decimal
+        required: true
+        min: 0
+        precision: 12
+        scale: 2
+        renamedFrom: netTotal
+      totalVAT:
+        type: decimal
+        required: true
+        min: 0
+        precision: 12
+        scale: 2
+        renamedFrom: vatTotal
+      total:
+        type: decimal
+        required: true
+        min: 0
+        precision: 12
+        scale: 2
+      placedAt:
+        type: datetime
+        required: true
+      expiresAt:
+        type: datetime
+        required: true
+      status:
+        type: enum
+        required: true
+        values:
+        - PendingPayment
+        - Paid
+        - Shipped
+        - Delivered
+        - Cancelled
+        - Expired
+        - Replaced
+        default: PendingPayment
+      carrier:
+        type: string
+        max: 100
+        required: false
+      tracking:
+        type: string
+        max: 120
+        required: false
+      replaces:
+        ref: Order
+        required: false
+      replacement:
+        ref: Order
+        required: false
+    children:
+      lines: OrderLine
+      vatBreakdown: OrderVat
+    rowFilter: OwnOrder
+  OrderLine:
+    fields:
+      product:
+        ref: Catalogue.Product
+        required: true
+      sku:
+        type: string
+        max: 40
+        required: true
+      name:
+        type: string
+        max: 200
+        required: true
+      quantity:
+        type: int
+        required: true
+        min: 1
+      unitPrice:
+        type: decimal
+        required: true
+        min: 0
+        precision: 12
+        scale: 2
+      taxClass:
+        type: enum
+        required: true
+        values:
+        - Standard
+        - Reduced
+        - Special
+        default: Standard
+      vatRate:
+        type: decimal
+        required: true
+        min: 0
+        max: 100
+        precision: 5
+        scale: 2
+      totalExclVAT:
+        type: decimal
+        required: true
+        min: 0
+        precision: 12
+        scale: 2
+        renamedFrom: net
+      totalVAT:
+        type: decimal
+        required: true
+        min: 0
+        precision: 12
+        scale: 2
+        renamedFrom: vat
+      total:
+        type: decimal
+        required: true
+        min: 0
+        precision: 12
+        scale: 2
+  OrderVat:
+    fields:
+      taxClass:
+        type: enum
+        required: true
+        values:
+        - Standard
+        - Reduced
+        - Special
+        default: Standard
+      rate:
+        type: decimal
+        required: true
+        min: 0
+        max: 100
+        precision: 5
+        scale: 2
+      totalExclVAT:
+        type: decimal
+        required: true
+        min: 0
+        precision: 12
+        scale: 2
+        renamedFrom: net
+      totalVAT:
+        type: decimal
+        required: true
+        min: 0
+        precision: 12
+        scale: 2
+        renamedFrom: vat
+      total:
+        type: decimal
+        required: true
+        min: 0
+        precision: 12
+        scale: 2
+        renamedFrom: gross
+  Reservation:
+    fields:
+      order:
+        ref: Order
+        required: true
+      stock:
+        ref: Catalogue.Stock
+        required: true
+      quantity:
+        type: int
+        required: true
+        min: 1
+      status:
+        type: enum
+        required: true
+        values:
+        - Held
+        - Consumed
+        - Released
+        default: Held
+  PaymentAttempt:
+    fields:
+      order:
+        ref: Order
+        required: true
+      attemptKey:
+        type: string
+        max: 200
+        required: true
+        unique: true
+      kind:
+        type: enum
+        required: true
+        values:
+        - Charge
+        - Refund
+        default: Charge
+      amount:
+        type: decimal
+        required: true
+        min: 0
+        precision: 12
+        scale: 2
+      outcome:
+        type: enum
+        required: true
+        values:
+        - Succeeded
+        - Declined
+        - TimedOut
+        default: Declined
+      reference:
+        type: string
+        max: 200
+        required: false
+      at:
+        type: datetime
+        required: true
+    rowFilter: OwnPayment
+contracts:
+  OwnCart:
+    kind: rowFilter
+    entity: Cart
+  OwnOrder:
+    kind: rowFilter
+    entity: Order
+  OwnPayment:
+    kind: rowFilter
+    entity: PaymentAttempt
+  OpenOwnedCart:
+    kind: commandHandler
+    input: Cart
+    data:
+      queries:
+      - Customers.CustomerById
+      - Catalogue.ProductById
+  ChangeCart:
+    kind: commandHandler
+    input: Cart
+    data:
+      queries:
+      - Catalogue.ProductById
+      - CartById
+  PlaceOrder:
+    kind: commandHandler
+    input: Cart
+    data:
+      queries:
+      - Customers.CustomerById
+      - Catalogue.ProductById
+      - Catalogue.StockByProduct
+      - Catalogue.CategoryById
+      - Tax.CountryByCode
+      - Tax.VatRatesFor
+      - OrderById
+      creates:
+      - Order
+      - Reservation
+      commands:
+      - Catalogue.ReserveStock
+      - SealCart
+  EditOrder:
+    kind: commandHandler
+    input: Order
+    data:
+      queries:
+      - HeldReservations
+      - Catalogue.ProductById
+      - Catalogue.StockByProduct
+      - Catalogue.CategoryById
+      - Tax.CountryByCode
+      - Tax.VatRatesFor
+      creates:
+      - Reservation
+      commands:
+      - Catalogue.ReserveStock
+      - Catalogue.ReleaseStock
+      - ReleaseReservation
+  StartReplacement:
+    kind: commandHandler
+    input: Order
+    data:
+      queries:
+      - OrderById
+      - Catalogue.StockByProduct
+      - Tax.CountryByCode
+      - Tax.VatRatesFor
+      creates:
+      - Order
+      - Reservation
+      commands:
+      - Catalogue.ReserveStock
+  TakePayment:
+    kind: commandHandler
+    input: Order
+    data:
+      queries:
+      - PaymentByKey
+      creates:
+      - PaymentAttempt
+      commands:
+      - ConfirmOrder
+    uses:
+    - Payments
+  ConsumeReservations:
+    kind: commandHandler
+    input: Order
+    data:
+      queries:
+      - HeldReservations
+      commands:
+      - Catalogue.ConsumeStock
+      - ConsumeReservation
+      - SupersedeOrder
+  ReleaseReservations:
+    kind: commandHandler
+    input: Order
+    data:
+      queries:
+      - HeldReservations
+      commands:
+      - Catalogue.ReleaseStock
+      - ReleaseReservation
+      - UnlinkReplacement
+  ExpireReservations:
+    kind: commandHandler
+    input: Order
+    data:
+      queries:
+      - HeldReservations
+      commands:
+      - Catalogue.ReleaseStock
+      - ReleaseReservation
+      - UnlinkReplacement
+  ClearReplacement:
+    kind: commandHandler
+    input: Order
+  SettleReplacedOrder:
+    kind: commandHandler
+    input: Order
+    data:
+      queries:
+      - ConsumedReservations
+      - PaymentByKey
+      creates:
+      - PaymentAttempt
+      commands:
+      - Catalogue.ReturnStock
+    uses:
+    - Payments
+  RefundOrder:
+    kind: commandHandler
+    input: Order
+    data:
+      queries:
+      - ConsumedReservations
+      - PaymentByKey
+      creates:
+      - PaymentAttempt
+      commands:
+      - Catalogue.ReturnStock
+    uses:
+    - Payments
+stateMachines:
+  Cart.status:
+    Open:
+    - CheckedOut
+  Order.status:
+    PendingPayment:
+    - Paid
+    - Cancelled
+    - Expired
+    Paid:
+    - Shipped
+    - Cancelled
+    - Replaced
+    Shipped:
+    - Delivered
+  Reservation.status:
+    Held:
+    - Consumed
+    - Released
+commands:
+  CreateCart:
+    kind: create
+    'on': Cart
+    handler: OpenOwnedCart
+  UpdateCart:
+    kind: update
+    'on': Cart
+    handler: ChangeCart
+    availableWhen:
+      status: Open
+  AddItem:
+    'on': Cart
+    handler: ChangeCart
+    input:
+      product:
+        ref: Catalogue.Product
+        required: true
+      quantity:
+        type: int
+        required: true
+        min: 1
+        max: 1000000
+    availableWhen:
+      status: Open
+  ChangeItem:
+    'on': Cart
+    handler: ChangeCart
+    input:
+      product:
+        ref: Catalogue.Product
+        required: true
+      quantity:
+        type: int
+        required: true
+        min: 1
+        max: 1000000
+      newProduct:
+        ref: Catalogue.Product
+        required: false
+    availableWhen:
+      status: Open
+  RemoveItem:
+    'on': Cart
+    handler: ChangeCart
+    input:
+      product:
+        ref: Catalogue.Product
+        required: true
+    availableWhen:
+      status: Open
+  SealCart:
+    'on': Cart
+    transition:
+      from: Open
+      to: CheckedOut
+  Checkout:
+    'on': Cart
+    handler: PlaceOrder
+    input:
+      requestKey:
+        type: string
+        max: 128
+        required: true
+  AddOrderItem:
+    'on': Order
+    handler: EditOrder
+    input:
+      product:
+        ref: Catalogue.Product
+        required: true
+      quantity:
+        type: int
+        required: true
+        min: 1
+        max: 1000000
+    availableWhen:
+      status: PendingPayment
+  ChangeOrderItem:
+    'on': Order
+    handler: EditOrder
+    input:
+      product:
+        ref: Catalogue.Product
+        required: true
+      quantity:
+        type: int
+        required: true
+        min: 1
+        max: 1000000
+      newProduct:
+        ref: Catalogue.Product
+        required: false
+    availableWhen:
+      status: PendingPayment
+  RemoveOrderItem:
+    'on': Order
+    handler: EditOrder
+    input:
+      product:
+        ref: Catalogue.Product
+        required: true
+    availableWhen:
+      status: PendingPayment
+  ReplaceOrder:
+    'on': Order
+    handler: StartReplacement
+    input:
+      requestKey:
+        type: string
+        max: 128
+        required: true
+    availableWhen:
+      status: Paid
+  PayOrder:
+    'on': Order
+    handler: TakePayment
+    input:
+      attemptKey:
+        type: string
+        max: 128
+        required: true
+      method:
+        type: enum
+        required: true
+        values:
+        - Success
+        - Decline
+        - Timeout
+        default: Success
+  ConfirmOrder:
+    'on': Order
+    handler: ConsumeReservations
+    transition:
+      from: PendingPayment
+      to: Paid
+  CancelOrder:
+    'on': Order
+    handler: ReleaseReservations
+    transition:
+      from: PendingPayment
+      to: Cancelled
+  ExpireOrder:
+    'on': Order
+    handler: ExpireReservations
+    transition:
+      from: PendingPayment
+      to: Expired
+  CancelPaidOrder:
+    'on': Order
+    handler: RefundOrder
+    transition:
+      from: Paid
+      to: Cancelled
+    availableWhen:
+      field: replacement
+      op: isNull
+  SupersedeOrder:
+    'on': Order
+    handler: SettleReplacedOrder
+    transition:
+      from: Paid
+      to: Replaced
+  UnlinkReplacement:
+    'on': Order
+    handler: ClearReplacement
+    input:
+      replacement:
+        ref: Order
+        required: true
+  ConsumeReservation:
+    'on': Reservation
+    transition:
+      from: Held
+      to: Consumed
+  ReleaseReservation:
+    'on': Reservation
+    transition:
+      from: Held
+      to: Released
+  ShipOrder:
+    'on': Order
+    input:
+      carrier:
+        type: string
+        max: 100
+        required: true
+      tracking:
+        type: string
+        max: 120
+        required: true
+    transition:
+      from: Paid
+      to: Shipped
+    availableWhen:
+      field: replacement
+      op: isNull
+    sets:
+      carrier: $input.carrier
+      tracking: $input.tracking
+  DeliverOrder:
+    'on': Order
+    transition:
+      from: Shipped
+      to: Delivered
+queries:
+  OrderPayments:
+    from: PaymentAttempt
+    select: [id, kind, outcome, amount, reference, at]
+    params: { orderId: { ref: Order, required: true } }
+    where: { order: { param: orderId } }
+    orderBy: [id]
+  CartById:
+    from: Cart
+    select:
+    - id
+    params:
+      cartId:
+        type: int
+        required: true
+    where:
+      id:
+        param: cartId
+  HeldReservations:
+    from: Reservation
+    select:
+    - id
+    params:
+      orderId:
+        ref: Order
+        required: true
+    where:
+      all:
+      - order:
+          param: orderId
+      - status: Held
+    orderBy:
+    - id
+  ConsumedReservations:
+    from: Reservation
+    select:
+    - id
+    params:
+      orderId:
+        ref: Order
+        required: true
+    where:
+      all:
+      - order:
+          param: orderId
+      - status: Consumed
+    orderBy:
+    - id
+  PaymentByKey:
+    from: PaymentAttempt
+    select:
+    - id
+    params:
+      key:
+        type: string
+        required: true
+    where:
+      attemptKey:
+        param: key
+    orderBy:
+    - id
+  PendingOrders:
+    from: Order
+    select:
+    - id
+    - expiresAt
+    where:
+      status: PendingPayment
+    orderBy:
+    - id
+  MyOrders:
+    from: Order
+    select:
+    - id
+    - total
+    - currency
+    - status
+    - placedAt
+    orderBy:
+    - field: id
+      dir: desc
+  OrderById:
+    from: Order
+    select:
+    - id
+    params:
+      orderId:
+        type: int
+        required: true
+    where:
+      id:
+        param: orderId
+permissions:
+  AddItem:
+  - Customer
+  ChangeItem:
+  - Customer
+  RemoveItem:
+  - Customer
+  SealCart:
+  - System
+  Checkout:
+  - Customer
+  AddOrderItem:
+  - Customer
+  ChangeOrderItem:
+  - Customer
+  RemoveOrderItem:
+  - Customer
+  ReplaceOrder:
+  - Customer
+  - Support
+  - Admin
+  PayOrder:
+  - Customer
+  ConfirmOrder:
+  - System
+  CancelOrder:
+  - Customer
+  - Support
+  - Admin
+  CancelPaidOrder:
+  - Customer
+  - Support
+  - Admin
+  ExpireOrder:
+  - System
+  SupersedeOrder:
+  - System
+  UnlinkReplacement:
+  - System
+  ConsumeReservation:
+  - System
+  ReleaseReservation:
+  - System
+  ShipOrder:
+  - Warehouse
+  - Admin
+  DeliverOrder:
+  - Warehouse
+  - Admin
+  Cart:
+    read:
+    - Customer
+    - Support
+    - Admin
+    create:
+    - Customer
+    update:
+    - Customer
+  Order:
+    read:
+    - Customer
+    - Support
+    - Warehouse
+    - Admin
+  Reservation:
+    read:
+    - Warehouse
+    - Admin
+  PaymentAttempt:
+    read:
+    - Customer
+    - Support
+    - Admin
+ports:
+  Payments:
+    kind: connector
+    operations:
+      Charge:
+        input:
+          key: string
+          amount: decimal
+          method: string
+        output:
+          outcome: string
+          reference: string
+      Refund:
+        input:
+          key: string
+          amount: decimal
+        output:
+          outcome: string
+          reference: string

@@ -1,0 +1,93 @@
+entities:
+  Country:
+    fields:
+      code:
+        type: string
+        max: 2
+        required: true
+        unique: true
+      name:
+        type: string
+        max: 120
+        required: true
+      pricesIncludeVAT:
+        type: bool
+        required: true
+        renamedFrom: pricesIncludeVat
+  VatRate:
+    fields:
+      rateKey:
+        type: string
+        max: 40
+        required: true
+        unique: true
+      country:
+        ref: Country
+        required: true
+      taxClass:
+        type: enum
+        required: true
+        values:
+        - Standard
+        - Reduced
+        - Special
+        default: Standard
+      rate:
+        type: decimal
+        required: true
+        min: 0
+        max: 100
+        precision: 5
+        scale: 2
+queries:
+  CountryByCode:
+    from: Country
+    select:
+    - id
+    params:
+      code:
+        type: string
+        required: true
+    where:
+      code:
+        param: code
+  VatRatesFor:
+    from: VatRate
+    select:
+    - id
+    params:
+      countryId:
+        ref: Country
+        required: true
+    where:
+      country:
+        param: countryId
+    orderBy:
+    - id
+permissions:
+  Country:
+    read:
+    - Customer
+    - CatalogueManager
+    - Warehouse
+    - Support
+    - Admin
+    create:
+    - CatalogueManager
+    - Admin
+    update:
+    - CatalogueManager
+    - Admin
+  VatRate:
+    read:
+    - Customer
+    - CatalogueManager
+    - Warehouse
+    - Support
+    - Admin
+    create:
+    - CatalogueManager
+    - Admin
+    update:
+    - CatalogueManager
+    - Admin

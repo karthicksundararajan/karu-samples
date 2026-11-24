@@ -1,0 +1,4 @@
+navigation:
+  - label: Catalogue
+    icon: package
+    items: [Category, Product, Stock, StockMovement]

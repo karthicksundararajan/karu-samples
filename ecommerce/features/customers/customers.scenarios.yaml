@@ -1,0 +1,40 @@
+scenarios:
+- name: A customer cannot choose the owner of their profile
+  given: {}
+  when:
+    create:
+      entity: Customer
+      set:
+        owner: dev:bob.dev
+        name: Alice
+        email: alice@example.test
+        shipping:
+          line1: Main 1
+          city: Zurich
+          postalCode: '8000'
+          country: CH
+    as:
+      user: alice.dev
+  expect:
+    rejected: true
+    errors:
+    - field: owner
+- name: Registering a profile assigns the signed-in identity
+  given: {}
+  when:
+    create:
+      entity: Customer
+      set:
+        name: Alice
+        email: alice@example.test
+        shipping:
+          line1: Main 1
+          city: Zurich
+          postalCode: '8000'
+          country: CH
+    as:
+      user: alice.dev
+  expect:
+    Customer:
+    - owner: dev:alice.dev
+      name: Alice

@@ -1,0 +1,84 @@
+valueObjects:
+  Address:
+    fields:
+      line1:
+        type: string
+        max: 200
+        required: true
+      city:
+        type: string
+        max: 120
+        required: true
+      postalCode:
+        type: string
+        max: 20
+        required: true
+      country:
+        type: string
+        max: 2
+        required: true
+entities:
+  Customer:
+    fields:
+      owner:
+        type: string
+        max: 300
+        required: false
+        unique: true
+        readonlyWhen:
+          not:
+            field: owner
+            op: isNull
+      name:
+        type: string
+        max: 120
+        required: true
+      email:
+        type: string
+        max: 200
+        required: true
+      shipping:
+        value: Address
+        required: true
+    rowFilter: OwnCustomer
+contracts:
+  OwnCustomer:
+    kind: rowFilter
+    entity: Customer
+  RegisterOwner:
+    kind: commandHandler
+    input: Customer
+  PreserveOwner:
+    kind: commandHandler
+    input: Customer
+commands:
+  RegisterCustomer:
+    kind: create
+    'on': Customer
+    handler: RegisterOwner
+  UpdateCustomer:
+    kind: update
+    'on': Customer
+    handler: PreserveOwner
+queries:
+  CustomerById:
+    from: Customer
+    select:
+    - id
+    params:
+      customerId:
+        type: int
+        required: true
+    where:
+      id:
+        param: customerId
+permissions:
+  Customer:
+    read:
+    - Customer
+    - Support
+    - Admin
+    create:
+    - Customer
+    update:
+    - Customer

@@ -1,0 +1,4 @@
+navigation:
+  - label: Tax
+    icon: receipt
+    items: [Country, VatRate]

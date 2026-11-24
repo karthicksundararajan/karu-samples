@@ -1,0 +1,35 @@
+pages:
+  OrderDetail:
+    template: detail
+    form:
+      entity: Order
+      sections:
+        - title: Order summary
+          fields: [customer, status, placedAt, expiresAt]
+        - title: Amounts
+          layout: stacked
+          fields: [currency, pricesIncludeVAT, subtotal, totalExclVAT, totalVAT, total]
+        - title: Shipment
+          fields: [shipping, carrier, tracking]
+        - title: Replacement
+          fields: [replaces, replacement]
+        - title: Order references
+          fields: [cartId, checkoutKey, owner]
+    related:
+      - title: Payments
+        query: OrderPayments
+        parameter: orderId
+        columns: [kind, outcome, amount, reference, at]
+actions:
+  PayOrder: { intent: primary }
+  CancelOrder: { intent: danger, confirm: true }
+  ShipOrder: { intent: primary }
+  AddOrderItem: { intent: primary }
+  ChangeOrderItem: { intent: primary }
+  RemoveOrderItem: { intent: danger, confirm: true }
+  ReplaceOrder: { intent: primary }
+  CancelPaidOrder: { intent: danger, confirm: true }
+navigation:
+  - label: Sales
+    icon: shopping-cart
+    items: [Cart, Order, Reservation, PaymentAttempt]

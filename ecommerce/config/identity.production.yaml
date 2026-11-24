@@ -1,0 +1,5 @@
+provider:
+  kind: oidc
+  authority: { setting: "Identity:Authority" }
+  clientId: { setting: "Identity:ClientId" }
+  clientSecret: { secret: KARU_OIDC_CLIENT_SECRET }

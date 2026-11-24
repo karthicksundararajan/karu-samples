@@ -1,0 +1,4 @@
+bindings:
+  Sales.Payments:
+    adapter: SimulatedPayments
+    timeout: PT1S

@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <KaruModelRoot>$(MSBuildThisFileDirectory)../..</KaruModelRoot>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Karu.Extensions.Sdk" Version="$(KaruVersion)" />
+    <PackageReference Include="Karu.Extensions.Generator" Version="$(KaruVersion)" PrivateAssets="all" />
+    <AdditionalFiles Include="$(KaruModelRoot)/features/**/*.app.yaml" />
+  </ItemGroup>
+</Project>

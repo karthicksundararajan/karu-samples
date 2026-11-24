@@ -1,0 +1,202 @@
+{
+  "formatVersion": 2,
+  "tables": [
+    {
+      "entity": "Catalogue.Category",
+      "table": "catalogue_category",
+      "columns": [
+        { "name": "id", "fieldType": "id", "required": true, "unique": true, "precision": 0, "scale": 0, "references": null },
+        { "name": "deletedAt", "fieldType": "dateTime", "required": false, "unique": false, "precision": 0, "scale": 0, "references": null },
+        { "name": "name", "fieldType": "string", "required": true, "unique": true, "precision": 0, "scale": 0, "references": null },
+        { "name": "taxClass", "fieldType": "enum", "required": true, "unique": false, "precision": 0, "scale": 0, "references": null }
+      ]
+    },
+    {
+      "entity": "Catalogue.Product",
+      "table": "catalogue_product",
+      "columns": [
+        { "name": "id", "fieldType": "id", "required": true, "unique": true, "precision": 0, "scale": 0, "references": null },
+        { "name": "deletedAt", "fieldType": "dateTime", "required": false, "unique": false, "precision": 0, "scale": 0, "references": null },
+        { "name": "sku", "fieldType": "string", "required": true, "unique": true, "precision": 0, "scale": 0, "references": null },
+        { "name": "name", "fieldType": "string", "required": true, "unique": false, "precision": 0, "scale": 0, "references": null },
+        { "name": "category", "fieldType": "ref", "required": true, "unique": false, "precision": 0, "scale": 0, "references": "catalogue_category" },
+        { "name": "price", "fieldType": "decimal", "required": true, "unique": false, "precision": 12, "scale": 2, "references": null },
+        { "name": "status", "fieldType": "enum", "required": true, "unique": false, "precision": 0, "scale": 0, "references": null }
+      ]
+    },
+    {
+      "entity": "Catalogue.Stock",
+      "table": "catalogue_stock",
+      "columns": [
+        { "name": "id", "fieldType": "id", "required": true, "unique": true, "precision": 0, "scale": 0, "references": null },
+        { "name": "deletedAt", "fieldType": "dateTime", "required": false, "unique": false, "precision": 0, "scale": 0, "references": null },
+        { "name": "product", "fieldType": "ref", "required": true, "unique": false, "precision": 0, "scale": 0, "references": "catalogue_product" },
+        { "name": "stockKey", "fieldType": "string", "required": true, "unique": true, "precision": 0, "scale": 0, "references": null },
+        { "name": "onHand", "fieldType": "int", "required": true, "unique": false, "precision": 0, "scale": 0, "references": null },
+        { "name": "reserved", "fieldType": "int", "required": true, "unique": false, "precision": 0, "scale": 0, "references": null }
+      ]
+    },
+    {
+      "entity": "Catalogue.StockMovement",
+      "table": "catalogue_stock_movement",
+      "columns": [
+        { "name": "id", "fieldType": "id", "required": true, "unique": true, "precision": 0, "scale": 0, "references": null },
+        { "name": "deletedAt", "fieldType": "dateTime", "required": false, "unique": false, "precision": 0, "scale": 0, "references": null },
+        { "name": "stock", "fieldType": "ref", "required": true, "unique": false, "precision": 0, "scale": 0, "references": "catalogue_stock" },
+        { "name": "kind", "fieldType": "enum", "required": true, "unique": false, "precision": 0, "scale": 0, "references": null },
+        { "name": "quantity", "fieldType": "int", "required": true, "unique": false, "precision": 0, "scale": 0, "references": null },
+        { "name": "at", "fieldType": "dateTime", "required": true, "unique": false, "precision": 0, "scale": 0, "references": null }
+      ]
+    },
+    {
+      "entity": "Customers.Customer",
+      "table": "customers_customer",
+      "columns": [
+        { "name": "id", "fieldType": "id", "required": true, "unique": true, "precision": 0, "scale": 0, "references": null },
+        { "name": "deletedAt", "fieldType": "dateTime", "required": false, "unique": false, "precision": 0, "scale": 0, "references": null },
+        { "name": "owner", "fieldType": "string", "required": false, "unique": true, "precision": 0, "scale": 0, "references": null },
+        { "name": "name", "fieldType": "string", "required": true, "unique": false, "precision": 0, "scale": 0, "references": null },
+        { "name": "email", "fieldType": "string", "required": true, "unique": false, "precision": 0, "scale": 0, "references": null },
+        { "name": "shipping.line1", "fieldType": "string", "required": true, "unique": false, "precision": 0, "scale": 0, "references": null },
+        { "name": "shipping.city", "fieldType": "string", "required": true, "unique": false, "precision": 0, "scale": 0, "references": null },
+        { "name": "shipping.postalCode", "fieldType": "string", "required": true, "unique": false, "precision": 0, "scale": 0, "references": null },
+        { "name": "shipping.country", "fieldType": "string", "required": true, "unique": false, "precision": 0, "scale": 0, "references": null }
+      ]
+    },
+    {
+      "entity": "Tax.Country",
+      "table": "tax_country",
+      "columns": [
+        { "name": "id", "fieldType": "id", "required": true, "unique": true, "precision": 0, "scale": 0, "references": null },
+        { "name": "deletedAt", "fieldType": "dateTime", "required": false, "unique": false, "precision": 0, "scale": 0, "references": null },
+        { "name": "code", "fieldType": "string", "required": true, "unique": true, "precision": 0, "scale": 0, "references": null },
+        { "name": "name", "fieldType": "string", "required": true, "unique": false, "precision": 0, "scale": 0, "references": null },
+        { "name": "pricesIncludeVAT", "fieldType": "bool", "required": true, "unique": false, "precision": 0, "scale": 0, "references": null }
+      ]
+    },
+    {
+      "entity": "Tax.VatRate",
+      "table": "tax_vat_rate",
+      "columns": [
+        { "name": "id", "fieldType": "id", "required": true, "unique": true, "precision": 0, "scale": 0, "references": null },
+        { "name": "deletedAt", "fieldType": "dateTime", "required": false, "unique": false, "precision": 0, "scale": 0, "references": null },
+        { "name": "rateKey", "fieldType": "string", "required": true, "unique": true, "precision": 0, "scale": 0, "references": null },
+        { "name": "country", "fieldType": "ref", "required": true, "unique": false, "precision": 0, "scale": 0, "references": "tax_country" },
+        { "name": "taxClass", "fieldType": "enum", "required": true, "unique": false, "precision": 0, "scale": 0, "references": null },
+        { "name": "rate", "fieldType": "decimal", "required": true, "unique": false, "precision": 5, "scale": 2, "references": null }
+      ]
+    },
+    {
+      "entity": "Sales.Cart",
+      "table": "sales_cart",
+      "columns": [
+        { "name": "id", "fieldType": "id", "required": true, "unique": true, "precision": 0, "scale": 0, "references": null },
+        { "name": "deletedAt", "fieldType": "dateTime", "required": false, "unique": false, "precision": 0, "scale": 0, "references": null },
+        { "name": "owner", "fieldType": "string", "required": false, "unique": false, "precision": 0, "scale": 0, "references": null },
+        { "name": "customer", "fieldType": "ref", "required": true, "unique": false, "precision": 0, "scale": 0, "references": "customers_customer" },
+        { "name": "status", "fieldType": "enum", "required": true, "unique": false, "precision": 0, "scale": 0, "references": null },
+        { "name": "order", "fieldType": "ref", "required": false, "unique": false, "precision": 0, "scale": 0, "references": "sales_order" }
+      ]
+    },
+    {
+      "entity": "Sales.CartLine",
+      "table": "sales_cart_line",
+      "columns": [
+        { "name": "id", "fieldType": "id", "required": true, "unique": true, "precision": 0, "scale": 0, "references": null },
+        { "name": "deletedAt", "fieldType": "dateTime", "required": false, "unique": false, "precision": 0, "scale": 0, "references": null },
+        { "name": "cart", "fieldType": "ref", "required": true, "unique": false, "precision": 0, "scale": 0, "references": "sales_cart", "owner": true },
+        { "name": "product", "fieldType": "ref", "required": true, "unique": false, "precision": 0, "scale": 0, "references": "catalogue_product" },
+        { "name": "quantity", "fieldType": "int", "required": true, "unique": false, "precision": 0, "scale": 0, "references": null }
+      ]
+    },
+    {
+      "entity": "Sales.Order",
+      "table": "sales_order",
+      "columns": [
+        { "name": "id", "fieldType": "id", "required": true, "unique": true, "precision": 0, "scale": 0, "references": null },
+        { "name": "deletedAt", "fieldType": "dateTime", "required": false, "unique": false, "precision": 0, "scale": 0, "references": null },
+        { "name": "owner", "fieldType": "string", "required": true, "unique": false, "precision": 0, "scale": 0, "references": null },
+        { "name": "cartId", "fieldType": "string", "required": false, "unique": true, "precision": 0, "scale": 0, "references": null },
+        { "name": "checkoutKey", "fieldType": "string", "required": true, "unique": true, "precision": 0, "scale": 0, "references": null },
+        { "name": "customer", "fieldType": "ref", "required": true, "unique": false, "precision": 0, "scale": 0, "references": "customers_customer" },
+        { "name": "shipping.line1", "fieldType": "string", "required": true, "unique": false, "precision": 0, "scale": 0, "references": null },
+        { "name": "shipping.city", "fieldType": "string", "required": true, "unique": false, "precision": 0, "scale": 0, "references": null },
+        { "name": "shipping.postalCode", "fieldType": "string", "required": true, "unique": false, "precision": 0, "scale": 0, "references": null },
+        { "name": "shipping.country", "fieldType": "string", "required": true, "unique": false, "precision": 0, "scale": 0, "references": null },
+        { "name": "currency", "fieldType": "enum", "required": true, "unique": false, "precision": 0, "scale": 0, "references": null },
+        { "name": "pricesIncludeVAT", "fieldType": "bool", "required": true, "unique": false, "precision": 0, "scale": 0, "references": null },
+        { "name": "subtotal", "fieldType": "decimal", "required": true, "unique": false, "precision": 12, "scale": 2, "references": null },
+        { "name": "totalExclVAT", "fieldType": "decimal", "required": true, "unique": false, "precision": 12, "scale": 2, "references": null },
+        { "name": "totalVAT", "fieldType": "decimal", "required": true, "unique": false, "precision": 12, "scale": 2, "references": null },
+        { "name": "total", "fieldType": "decimal", "required": true, "unique": false, "precision": 12, "scale": 2, "references": null },
+        { "name": "placedAt", "fieldType": "dateTime", "required": true, "unique": false, "precision": 0, "scale": 0, "references": null },
+        { "name": "expiresAt", "fieldType": "dateTime", "required": true, "unique": false, "precision": 0, "scale": 0, "references": null },
+        { "name": "status", "fieldType": "enum", "required": true, "unique": false, "precision": 0, "scale": 0, "references": null },
+        { "name": "carrier", "fieldType": "string", "required": false, "unique": false, "precision": 0, "scale": 0, "references": null },
+        { "name": "tracking", "fieldType": "string", "required": false, "unique": false, "precision": 0, "scale": 0, "references": null },
+        { "name": "replaces", "fieldType": "ref", "required": false, "unique": false, "precision": 0, "scale": 0, "references": "sales_order" },
+        { "name": "replacement", "fieldType": "ref", "required": false, "unique": false, "precision": 0, "scale": 0, "references": "sales_order" }
+      ]
+    },
+    {
+      "entity": "Sales.OrderLine",
+      "table": "sales_order_line",
+      "columns": [
+        { "name": "id", "fieldType": "id", "required": true, "unique": true, "precision": 0, "scale": 0, "references": null },
+        { "name": "deletedAt", "fieldType": "dateTime", "required": false, "unique": false, "precision": 0, "scale": 0, "references": null },
+        { "name": "order", "fieldType": "ref", "required": true, "unique": false, "precision": 0, "scale": 0, "references": "sales_order", "owner": true },
+        { "name": "product", "fieldType": "ref", "required": true, "unique": false, "precision": 0, "scale": 0, "references": "catalogue_product" },
+        { "name": "sku", "fieldType": "string", "required": true, "unique": false, "precision": 0, "scale": 0, "references": null },
+        { "name": "name", "fieldType": "string", "required": true, "unique": false, "precision": 0, "scale": 0, "references": null },
+        { "name": "quantity", "fieldType": "int", "required": true, "unique": false, "precision": 0, "scale": 0, "references": null },
+        { "name": "unitPrice", "fieldType": "decimal", "required": true, "unique": false, "precision": 12, "scale": 2, "references": null },
+        { "name": "taxClass", "fieldType": "enum", "required": true, "unique": false, "precision": 0, "scale": 0, "references": null },
+        { "name": "vatRate", "fieldType": "decimal", "required": true, "unique": false, "precision": 5, "scale": 2, "references": null },
+        { "name": "totalExclVAT", "fieldType": "decimal", "required": true, "unique": false, "precision": 12, "scale": 2, "references": null },
+        { "name": "totalVAT", "fieldType": "decimal", "required": true, "unique": false, "precision": 12, "scale": 2, "references": null },
+        { "name": "total", "fieldType": "decimal", "required": true, "unique": false, "precision": 12, "scale": 2, "references": null }
+      ]
+    },
+    {
+      "entity": "Sales.OrderVat",
+      "table": "sales_order_vat",
+      "columns": [
+        { "name": "id", "fieldType": "id", "required": true, "unique": true, "precision": 0, "scale": 0, "references": null },
+        { "name": "deletedAt", "fieldType": "dateTime", "required": false, "unique": false, "precision": 0, "scale": 0, "references": null },
+        { "name": "order", "fieldType": "ref", "required": true, "unique": false, "precision": 0, "scale": 0, "references": "sales_order", "owner": true },
+        { "name": "taxClass", "fieldType": "enum", "required": true, "unique": false, "precision": 0, "scale": 0, "references": null },
+        { "name": "rate", "fieldType": "decimal", "required": true, "unique": false, "precision": 5, "scale": 2, "references": null },
+        { "name": "totalExclVAT", "fieldType": "decimal", "required": true, "unique": false, "precision": 12, "scale": 2, "references": null },
+        { "name": "totalVAT", "fieldType": "decimal", "required": true, "unique": false, "precision": 12, "scale": 2, "references": null },
+        { "name": "total", "fieldType": "decimal", "required": true, "unique": false, "precision": 12, "scale": 2, "references": null }
+      ]
+    },
+    {
+      "entity": "Sales.Reservation",
+      "table": "sales_reservation",
+      "columns": [
+        { "name": "id", "fieldType": "id", "required": true, "unique": true, "precision": 0, "scale": 0, "references": null },
+        { "name": "deletedAt", "fieldType": "dateTime", "required": false, "unique": false, "precision": 0, "scale": 0, "references": null },
+        { "name": "order", "fieldType": "ref", "required": true, "unique": false, "precision": 0, "scale": 0, "references": "sales_order" },
+        { "name": "stock", "fieldType": "ref", "required": true, "unique": false, "precision": 0, "scale": 0, "references": "catalogue_stock" },
+        { "name": "quantity", "fieldType": "int", "required": true, "unique": false, "precision": 0, "scale": 0, "references": null },
+        { "name": "status", "fieldType": "enum", "required": true, "unique": false, "precision": 0, "scale": 0, "references": null }
+      ]
+    },
+    {
+      "entity": "Sales.PaymentAttempt",
+      "table": "sales_payment_attempt",
+      "columns": [
+        { "name": "id", "fieldType": "id", "required": true, "unique": true, "precision": 0, "scale": 0, "references": null },
+        { "name": "deletedAt", "fieldType": "dateTime", "required": false, "unique": false, "precision": 0, "scale": 0, "references": null },
+        { "name": "order", "fieldType": "ref", "required": true, "unique": false, "precision": 0, "scale": 0, "references": "sales_order" },
+        { "name": "attemptKey", "fieldType": "string", "required": true, "unique": true, "precision": 0, "scale": 0, "references": null },
+        { "name": "kind", "fieldType": "enum", "required": true, "unique": false, "precision": 0, "scale": 0, "references": null },
+        { "name": "amount", "fieldType": "decimal", "required": true, "unique": false, "precision": 12, "scale": 2, "references": null },
+        { "name": "outcome", "fieldType": "enum", "required": true, "unique": false, "precision": 0, "scale": 0, "references": null },
+        { "name": "reference", "fieldType": "string", "required": false, "unique": false, "precision": 0, "scale": 0, "references": null },
+        { "name": "at", "fieldType": "dateTime", "required": true, "unique": false, "precision": 0, "scale": 0, "references": null }
+      ]
+    }
+  ]
+}
