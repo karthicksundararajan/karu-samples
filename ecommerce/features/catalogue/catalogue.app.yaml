@@ -1,90 +1,34 @@
+types:
+  Money: { type: decimal, precision: 12, scale: 2, min: 0 }
+  Count: { type: int, min: 0 }
+  Units: { type: int, min: 1 }
 entities:
   Category:
     fields:
-      name:
-        type: string
-        max: 120
-        required: true
-        unique: true
-      taxClass:
-        type: enum
-        required: true
-        values:
-        - Standard
-        - Reduced
-        - Special
-        default: Standard
+      name: { type: string, max: 120, required: true, unique: true }
+      taxClass: Tax.TaxClass
   Product:
     fields:
-      sku:
-        type: string
-        max: 40
-        required: true
-        unique: true
-      name:
-        type: string
-        max: 200
-        required: true
-      category:
-        ref: Category
-        required: true
-      price:
-        type: decimal
-        required: true
-        min: 0
-        precision: 12
-        scale: 2
-      status:
-        type: enum
-        required: true
-        values:
-        - Draft
-        - Active
-        - Discontinued
-        default: Draft
+      sku: { type: string, max: 40, required: true, unique: true }
+      name: { type: string, max: 200, required: true }
+      category: Category
+      price: Money
+      status: { type: enum, required: true, values: [Draft, Active, Discontinued], default: Draft }
     rowFilter: VisibleProducts
   Stock:
     fields:
-      product:
-        ref: Product
-        required: true
-      stockKey:
-        type: string
-        max: 40
-        required: true
-        unique: true
-      onHand:
-        type: int
-        required: true
-        min: 0
-      reserved:
-        type: int
-        required: true
-        min: 0
+      product: Product
+      stockKey: { type: string, max: 40, required: true, unique: true }
+      onHand: Count
+      reserved: Count
     rules:
     - ValidStock
   StockMovement:
     fields:
-      stock:
-        ref: Stock
-        required: true
-      kind:
-        type: enum
-        required: true
-        values:
-        - Adjustment
-        - Reservation
-        - Release
-        - Sale
-        - Return
-        default: Adjustment
-      quantity:
-        type: int
-        required: true
-        min: -1000000
-      at:
-        type: datetime
-        required: true
+      stock: Stock
+      kind: { type: enum, required: true, values: [Adjustment, Reservation, Release, Sale, Return], default: Adjustment }
+      quantity: { type: int, required: true, min: -1000000 }
+      at: datetime
 contracts:
   VisibleProducts:
     kind: rowFilter
@@ -149,42 +93,27 @@ commands:
   AdjustStock:
     'on': Stock
     input:
-      quantity:
-        type: int
-        required: true
-        min: -1000000
+      quantity: { type: int, required: true, min: -1000000 }
     handler: AdjustBalance
   ReserveStock:
     'on': Stock
     input:
-      quantity:
-        type: int
-        required: true
-        min: 1
+      quantity: Units
     handler: ReserveBalance
   ReleaseStock:
     'on': Stock
     input:
-      quantity:
-        type: int
-        required: true
-        min: 1
+      quantity: Units
     handler: ReleaseBalance
   ConsumeStock:
     'on': Stock
     input:
-      quantity:
-        type: int
-        required: true
-        min: 1
+      quantity: Units
     handler: ConsumeBalance
   ReturnStock:
     'on': Stock
     input:
-      quantity:
-        type: int
-        required: true
-        min: 1
+      quantity: Units
     handler: ReturnBalance
 events:
   ProductCreated:

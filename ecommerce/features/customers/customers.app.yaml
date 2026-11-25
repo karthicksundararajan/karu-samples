@@ -1,22 +1,10 @@
 valueObjects:
   Address:
     fields:
-      line1:
-        type: string
-        max: 200
-        required: true
-      city:
-        type: string
-        max: 120
-        required: true
-      postalCode:
-        type: string
-        max: 20
-        required: true
-      country:
-        type: string
-        max: 2
-        required: true
+      line1: { type: string, max: 200, required: true }
+      city: { type: string, max: 120, required: true }
+      postalCode: { type: string, max: 20, required: true }
+      country: { type: string, max: 2, required: true }
 entities:
   Customer:
     fields:
@@ -29,17 +17,9 @@ entities:
           not:
             field: owner
             op: isNull
-      name:
-        type: string
-        max: 120
-        required: true
-      email:
-        type: string
-        max: 200
-        required: true
-      shipping:
-        value: Address
-        required: true
+      name: { type: string, max: 120, required: true }
+      email: { type: string, max: 200, required: true }
+      shipping: Address
     rowFilter: OwnCustomer
 contracts:
   OwnCustomer:

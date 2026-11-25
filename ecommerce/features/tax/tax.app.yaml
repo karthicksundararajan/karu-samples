@@ -1,44 +1,18 @@
+types:
+  TaxClass: { type: enum, values: [Standard, Reduced, Special], default: Standard }
+  Percent: { type: decimal, precision: 5, scale: 2, min: 0, max: 100 }
 entities:
   Country:
     fields:
-      code:
-        type: string
-        max: 2
-        required: true
-        unique: true
-      name:
-        type: string
-        max: 120
-        required: true
-      pricesIncludeVAT:
-        type: bool
-        required: true
-        renamedFrom: pricesIncludeVat
+      code: { type: string, max: 2, required: true, unique: true }
+      name: { type: string, max: 120, required: true }
+      pricesIncludeVAT: { type: bool, required: true, renamedFrom: pricesIncludeVat }
   VatRate:
     fields:
-      rateKey:
-        type: string
-        max: 40
-        required: true
-        unique: true
-      country:
-        ref: Country
-        required: true
-      taxClass:
-        type: enum
-        required: true
-        values:
-        - Standard
-        - Reduced
-        - Special
-        default: Standard
-      rate:
-        type: decimal
-        required: true
-        min: 0
-        max: 100
-        precision: 5
-        scale: 2
+      rateKey: { type: string, max: 40, required: true, unique: true }
+      country: Country
+      taxClass: TaxClass
+      rate: Percent
 queries:
   CountryByCode:
     from: Country

@@ -1,289 +1,84 @@
+types:
+  Quantity: { type: int, min: 1, max: 1000000 }
+  RequestKey: { type: string, max: 128 }
 entities:
   Cart:
     aggregate: true
     fields:
-      owner:
-        type: string
-        max: 300
-        required: false
-      customer:
-        ref: Customers.Customer
-        required: true
-      status:
-        type: enum
-        required: true
-        values:
-        - Open
-        - CheckedOut
-        default: Open
-      order:
-        ref: Order
-        required: false
+      owner: { type: string, max: 300 }
+      customer: Customers.Customer
+      status: { type: enum, required: true, values: [Open, CheckedOut], default: Open }
+      order: Order?
     children:
-      lines:
-        entity: CartLine
-        readonlyWhen:
-          status: CheckedOut
+      lines: { entity: CartLine, readonlyWhen: { status: CheckedOut } }
     rowFilter: OwnCart
   CartLine:
     fields:
-      product:
-        ref: Catalogue.Product
-        required: true
-      quantity:
-        type: int
-        required: true
-        min: 1
-        max: 1000000
+      product: Catalogue.Product
+      quantity: Quantity
   Order:
     aggregate: true
     fields:
-      owner:
-        type: string
-        max: 300
-        required: true
-      cartId:
-        type: string
-        max: 30
-        required: false
-        unique: true
-      checkoutKey:
-        type: string
-        max: 200
-        required: true
-        unique: true
-      customer:
-        ref: Customers.Customer
-        required: true
-      shipping:
-        value: Customers.Address
-        required: true
-      currency:
-        type: enum
-        required: true
-        values:
-        - CHF
-        default: CHF
-      pricesIncludeVAT:
-        type: bool
-        required: true
-        renamedFrom: pricesIncludeVat
-      subtotal:
-        type: decimal
-        required: true
-        min: 0
-        precision: 12
-        scale: 2
-      totalExclVAT:
-        type: decimal
-        required: true
-        min: 0
-        precision: 12
-        scale: 2
-        renamedFrom: netTotal
-      totalVAT:
-        type: decimal
-        required: true
-        min: 0
-        precision: 12
-        scale: 2
-        renamedFrom: vatTotal
-      total:
-        type: decimal
-        required: true
-        min: 0
-        precision: 12
-        scale: 2
-      placedAt:
-        type: datetime
-        required: true
-      expiresAt:
-        type: datetime
-        required: true
+      owner: { type: string, max: 300, required: true }
+      cartId: { type: string, max: 30, unique: true }
+      checkoutKey: { type: string, max: 200, required: true, unique: true }
+      customer: Customers.Customer
+      shipping: Customers.Address
+      currency: { type: enum, required: true, values: [CHF], default: CHF }
+      pricesIncludeVAT: { type: bool, required: true, renamedFrom: pricesIncludeVat }
+      subtotal: Catalogue.Money
+      totalExclVAT: { type: Catalogue.Money, required: true, renamedFrom: netTotal }
+      totalVAT: { type: Catalogue.Money, required: true, renamedFrom: vatTotal }
+      total: Catalogue.Money
+      placedAt: datetime
+      expiresAt: datetime
       status:
         type: enum
         required: true
-        values:
-        - PendingPayment
-        - Paid
-        - Shipped
-        - Delivered
-        - Cancelled
-        - Expired
-        - Replaced
+        values: [PendingPayment, Paid, Shipped, Delivered, Cancelled, Expired, Replaced]
         default: PendingPayment
-      carrier:
-        type: string
-        max: 100
-        required: false
-      tracking:
-        type: string
-        max: 120
-        required: false
-      replaces:
-        ref: Order
-        required: false
-      replacement:
-        ref: Order
-        required: false
+      carrier: { type: string, max: 100 }
+      tracking: { type: string, max: 120 }
+      replaces: Order?
+      replacement: Order?
     children:
       lines: OrderLine
       vatBreakdown: OrderVat
     rowFilter: OwnOrder
   OrderLine:
     fields:
-      product:
-        ref: Catalogue.Product
-        required: true
-      sku:
-        type: string
-        max: 40
-        required: true
-      name:
-        type: string
-        max: 200
-        required: true
-      quantity:
-        type: int
-        required: true
-        min: 1
-      unitPrice:
-        type: decimal
-        required: true
-        min: 0
-        precision: 12
-        scale: 2
-      taxClass:
-        type: enum
-        required: true
-        values:
-        - Standard
-        - Reduced
-        - Special
-        default: Standard
-      vatRate:
-        type: decimal
-        required: true
-        min: 0
-        max: 100
-        precision: 5
-        scale: 2
-      totalExclVAT:
-        type: decimal
-        required: true
-        min: 0
-        precision: 12
-        scale: 2
-        renamedFrom: net
-      totalVAT:
-        type: decimal
-        required: true
-        min: 0
-        precision: 12
-        scale: 2
-        renamedFrom: vat
-      total:
-        type: decimal
-        required: true
-        min: 0
-        precision: 12
-        scale: 2
+      product: Catalogue.Product
+      sku: { type: string, max: 40, required: true }
+      name: { type: string, max: 200, required: true }
+      quantity: Catalogue.Units
+      unitPrice: Catalogue.Money
+      taxClass: Tax.TaxClass
+      vatRate: Tax.Percent
+      totalExclVAT: { type: Catalogue.Money, required: true, renamedFrom: net }
+      totalVAT: { type: Catalogue.Money, required: true, renamedFrom: vat }
+      total: Catalogue.Money
   OrderVat:
     fields:
-      taxClass:
-        type: enum
-        required: true
-        values:
-        - Standard
-        - Reduced
-        - Special
-        default: Standard
-      rate:
-        type: decimal
-        required: true
-        min: 0
-        max: 100
-        precision: 5
-        scale: 2
-      totalExclVAT:
-        type: decimal
-        required: true
-        min: 0
-        precision: 12
-        scale: 2
-        renamedFrom: net
-      totalVAT:
-        type: decimal
-        required: true
-        min: 0
-        precision: 12
-        scale: 2
-        renamedFrom: vat
-      total:
-        type: decimal
-        required: true
-        min: 0
-        precision: 12
-        scale: 2
-        renamedFrom: gross
+      taxClass: Tax.TaxClass
+      rate: Tax.Percent
+      totalExclVAT: { type: Catalogue.Money, required: true, renamedFrom: net }
+      totalVAT: { type: Catalogue.Money, required: true, renamedFrom: vat }
+      total: { type: Catalogue.Money, required: true, renamedFrom: gross }
   Reservation:
     fields:
-      order:
-        ref: Order
-        required: true
-      stock:
-        ref: Catalogue.Stock
-        required: true
-      quantity:
-        type: int
-        required: true
-        min: 1
-      status:
-        type: enum
-        required: true
-        values:
-        - Held
-        - Consumed
-        - Released
-        default: Held
+      order: Order
+      stock: Catalogue.Stock
+      quantity: Catalogue.Units
+      status: { type: enum, required: true, values: [Held, Consumed, Released], default: Held }
   PaymentAttempt:
     fields:
-      order:
-        ref: Order
-        required: true
-      attemptKey:
-        type: string
-        max: 200
-        required: true
-        unique: true
-      kind:
-        type: enum
-        required: true
-        values:
-        - Charge
-        - Refund
-        default: Charge
-      amount:
-        type: decimal
-        required: true
-        min: 0
-        precision: 12
-        scale: 2
-      outcome:
-        type: enum
-        required: true
-        values:
-        - Succeeded
-        - Declined
-        - TimedOut
-        default: Declined
-      reference:
-        type: string
-        max: 200
-        required: false
-      at:
-        type: datetime
-        required: true
+      order: Order
+      attemptKey: { type: string, max: 200, required: true, unique: true }
+      kind: { type: enum, required: true, values: [Charge, Refund], default: Charge }
+      amount: Catalogue.Money
+      outcome: { type: enum, required: true, values: [Succeeded, Declined, TimedOut], default: Declined }
+      reference: { type: string, max: 200 }
+      at: datetime
     rowFilter: OwnPayment
 contracts:
   OwnCart:
@@ -463,40 +258,24 @@ commands:
     'on': Cart
     handler: ChangeCart
     input:
-      product:
-        ref: Catalogue.Product
-        required: true
-      quantity:
-        type: int
-        required: true
-        min: 1
-        max: 1000000
+      product: Catalogue.Product
+      quantity: Quantity
     availableWhen:
       status: Open
   ChangeItem:
     'on': Cart
     handler: ChangeCart
     input:
-      product:
-        ref: Catalogue.Product
-        required: true
-      quantity:
-        type: int
-        required: true
-        min: 1
-        max: 1000000
-      newProduct:
-        ref: Catalogue.Product
-        required: false
+      product: Catalogue.Product
+      quantity: Quantity
+      newProduct: Catalogue.Product?
     availableWhen:
       status: Open
   RemoveItem:
     'on': Cart
     handler: ChangeCart
     input:
-      product:
-        ref: Catalogue.Product
-        required: true
+      product: Catalogue.Product
     availableWhen:
       status: Open
   SealCart:
@@ -508,76 +287,44 @@ commands:
     'on': Cart
     handler: PlaceOrder
     input:
-      requestKey:
-        type: string
-        max: 128
-        required: true
+      requestKey: RequestKey
   AddOrderItem:
     'on': Order
     handler: EditOrder
     input:
-      product:
-        ref: Catalogue.Product
-        required: true
-      quantity:
-        type: int
-        required: true
-        min: 1
-        max: 1000000
+      product: Catalogue.Product
+      quantity: Quantity
     availableWhen:
       status: PendingPayment
   ChangeOrderItem:
     'on': Order
     handler: EditOrder
     input:
-      product:
-        ref: Catalogue.Product
-        required: true
-      quantity:
-        type: int
-        required: true
-        min: 1
-        max: 1000000
-      newProduct:
-        ref: Catalogue.Product
-        required: false
+      product: Catalogue.Product
+      quantity: Quantity
+      newProduct: Catalogue.Product?
     availableWhen:
       status: PendingPayment
   RemoveOrderItem:
     'on': Order
     handler: EditOrder
     input:
-      product:
-        ref: Catalogue.Product
-        required: true
+      product: Catalogue.Product
     availableWhen:
       status: PendingPayment
   ReplaceOrder:
     'on': Order
     handler: StartReplacement
     input:
-      requestKey:
-        type: string
-        max: 128
-        required: true
+      requestKey: RequestKey
     availableWhen:
       status: Paid
   PayOrder:
     'on': Order
     handler: TakePayment
     input:
-      attemptKey:
-        type: string
-        max: 128
-        required: true
-      method:
-        type: enum
-        required: true
-        values:
-        - Success
-        - Decline
-        - Timeout
-        default: Success
+      attemptKey: RequestKey
+      method: { type: enum, required: true, values: [Success, Decline, Timeout], default: Success }
   ConfirmOrder:
     'on': Order
     handler: ConsumeReservations
@@ -615,9 +362,7 @@ commands:
     'on': Order
     handler: ClearReplacement
     input:
-      replacement:
-        ref: Order
-        required: true
+      replacement: Order
   ConsumeReservation:
     'on': Reservation
     transition:
@@ -631,14 +376,8 @@ commands:
   ShipOrder:
     'on': Order
     input:
-      carrier:
-        type: string
-        max: 100
-        required: true
-      tracking:
-        type: string
-        max: 120
-        required: true
+      carrier: { type: string, max: 100, required: true }
+      tracking: { type: string, max: 120, required: true }
     transition:
       from: Paid
       to: Shipped
