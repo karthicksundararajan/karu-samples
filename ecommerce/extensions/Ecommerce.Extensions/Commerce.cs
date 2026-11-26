@@ -19,11 +19,8 @@ internal static class Commerce
     }
     public static EntityRecord One(HandlerContext context, string query, params (string Key, object? Value)[] parameters) =>
         All(context, query, parameters).SingleOrDefault() ?? throw new HandlerDataException("The related record does not exist.");
-    public static string Identity(HandlerContext context) => context.User ?? throw new HandlerDataException("Sign in first.");
     public static string Id(long id) => id.ToString(CultureInfo.InvariantCulture);
     public static bool Staff(RowFilterContext context) => context.Roles.Overlaps(["CatalogueManager", "Warehouse", "Support", "Admin", "System"]);
-    public static Condition? Owned(RowFilterContext context, string path) =>
-        Staff(context) ? null : Condition.Eq(path, context.Subject ?? context.User ?? "__no_user__");
     /// <summary>A business refusal from inside a helper; the invoker returns it as a handler error and the write rolls back.</summary>
     public static HandlerDataException Refuse(string message) => new(message);
     public static bool Is(EntityRecord input, string command) => input.Entity.EndsWith("." + command, StringComparison.Ordinal);
@@ -181,7 +178,7 @@ internal static class Orders
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
-// Row filters, customers, catalogue
+// Catalogue
 // ---------------------------------------------------------------------------------------------------------------------
 
 [KaruContract("Catalogue.VisibleProducts")]
@@ -189,29 +186,7 @@ public sealed class VisibleProducts : RowFilter
 {
     public override Condition? Filter(RowFilterContext context) => Commerce.Staff(context) ? null : Condition.Eq("status", "Active");
 }
-[KaruContract("Customers.OwnCustomer")]
-public sealed class OwnCustomer : RowFilter { public override Condition? Filter(RowFilterContext context) => Commerce.Owned(context, "owner"); }
-[KaruContract("Sales.OwnCart")]
-public sealed class OwnCart : RowFilter { public override Condition? Filter(RowFilterContext context) => Commerce.Owned(context, "owner"); }
-[KaruContract("Sales.OwnOrder")]
-public sealed class OwnOrder : RowFilter { public override Condition? Filter(RowFilterContext context) => Commerce.Owned(context, "owner"); }
-[KaruContract("Sales.OwnPayment")]
-public sealed class OwnPayment : RowFilter { public override Condition? Filter(RowFilterContext context) => Commerce.Owned(context, "order.owner"); }
 
-[KaruContract("Customers.RegisterOwner")]
-public sealed class RegisterOwner : CommandHandler
-{
-    public override HandlerResult Handle(EntityRecord record, EntityRecord input, HandlerContext context) =>
-        !string.IsNullOrEmpty(record.Get<string?>("owner"))
-            ? HandlerResult.Fail("owner", "Ownership is assigned by the server; omit owner.")
-            : HandlerResult.Ok.Set("owner", Commerce.Identity(context));
-}
-[KaruContract("Customers.PreserveOwner")]
-public sealed class PreserveOwner : CommandHandler
-{
-    public override HandlerResult Handle(EntityRecord record, EntityRecord input, HandlerContext context) =>
-        record.Get<string>("owner") == Commerce.Identity(context) ? HandlerResult.Ok : HandlerResult.Fail("owner", "Ownership cannot change.");
-}
 [KaruContract("Catalogue.InitializeStock")]
 public sealed class InitializeStock : EventSubscriber
 {
@@ -288,17 +263,11 @@ internal static class Carts
         record.Children("lines").Select(l => new CartItem(l.Id, l.Ref("product")!.Id, l.Get<int>("quantity"))).ToList();
 }
 
-[KaruContract("Sales.OpenOwnedCart")]
-public sealed class OpenOwnedCart : CommandHandler
+[KaruContract("Sales.OpenCart")]
+public sealed class OpenCart : CommandHandler
 {
-    public override HandlerResult Handle(EntityRecord record, EntityRecord input, HandlerContext context)
-    {
-        if (!record.IsNull("owner") || !record.IsNull("order")) return HandlerResult.Fail(null, "Omit owner and order; they are server-managed.");
-        var customer = Commerce.One(context, "Customers.CustomerById", ("customerId", record.Ref("customer")!.Id));
-        if (customer.Get<string>("owner") != Commerce.Identity(context)) return HandlerResult.Fail("customer", "Choose your own customer profile.");
-        var lines = Carts.Lines(context, Carts.Items(record), []);
-        return lines.Valid ? lines.Set("owner", Commerce.Identity(context)) : lines;
-    }
+    public override HandlerResult Handle(EntityRecord record, EntityRecord input, HandlerContext context) =>
+        record.IsNull("order") ? Carts.Lines(context, Carts.Items(record), []) : HandlerResult.Fail("order", "Omit order; it is set at checkout.");
 }
 
 /// <summary>Every cart change (grid update, AddItem, ChangeItem, RemoveItem) rewrites the lines through <see cref="Carts.Lines"/>.</summary>
@@ -308,12 +277,10 @@ public sealed class ChangeCart : CommandHandler
     public override HandlerResult Handle(EntityRecord record, EntityRecord input, HandlerContext context)
     {
         var stored = Commerce.One(context, "CartById", ("cartId", record.Id));
-        if (stored.Get<string?>("owner") != Commerce.Identity(context)) return HandlerResult.Fail(null, "This cart belongs to another customer.");
         var lines = Carts.Items(record);
         if (Commerce.Is(input, "UpdateCart"))
         {
-            if (record.Get<string?>("owner") != stored.Get<string?>("owner") || record.Ref("customer")?.Id != stored.Ref("customer")?.Id
-                || record.Ref("order")?.Id != stored.Ref("order")?.Id)
+            if (record.Ref("customer")?.Id != stored.Ref("customer")?.Id || record.Ref("order")?.Id != stored.Ref("order")?.Id)
                 return HandlerResult.Fail(null, "Only the lines of a cart can be changed.");
             return Carts.Lines(context, lines, stored.Children("lines"));
         }
@@ -339,7 +306,6 @@ public sealed class PlaceOrder : CommandHandler
 {
     public override HandlerResult Handle(EntityRecord record, EntityRecord input, HandlerContext context)
     {
-        if (record.Get<string>("owner") != Commerce.Identity(context)) return HandlerResult.Fail(null, "This cart belongs to another customer.");
         var key = $"{record.Id}:{input.Get<string>("requestKey")}";
         if (record.Ref("order") is { } existing)
         {
@@ -349,7 +315,6 @@ public sealed class PlaceOrder : CommandHandler
         }
         if (record.Get<string>("status") != "Open") return HandlerResult.Fail(null, "This cart is closed.");
         var customer = Commerce.One(context, "Customers.CustomerById", ("customerId", record.Ref("customer")!.Id));
-        if (customer.Get<string>("owner") != Commerce.Identity(context)) return HandlerResult.Fail(null, "The customer profile does not belong to you.");
         var lines = record.Children("lines");
         if (lines.Count == 0) return HandlerResult.Fail(null, "The cart is empty.");
         var tax = TaxRules.For(context, Orders.Country(customer));
@@ -371,7 +336,6 @@ public sealed class EditOrder : CommandHandler
 {
     public override HandlerResult Handle(EntityRecord record, EntityRecord input, HandlerContext context)
     {
-        if (record.Get<string>("owner") != Commerce.Identity(context)) return HandlerResult.Fail(null, "This order belongs to another customer.");
         if (record.Get<string>("status") != "PendingPayment") return HandlerResult.Fail(null, "Only pending orders can be changed.");
         if (context.UtcNow >= record.Get<DateTime>("expiresAt")) return HandlerResult.Fail(null, "This order has expired.");
         var tax = TaxRules.For(context, Orders.Country(record));
@@ -443,7 +407,6 @@ public sealed class TakePayment : CommandHandler
 {
     public override HandlerResult Handle(EntityRecord record, EntityRecord input, HandlerContext context)
     {
-        if (record.Get<string>("owner") != Commerce.Identity(context)) return HandlerResult.Fail(null, "This order belongs to another customer.");
         var key = $"{record.Id}:{input.Get<string>("attemptKey")}";
         if (Commerce.All(context, "PaymentByKey", ("key", key)).Count != 0) return HandlerResult.Ok;
         if (record.Get<string>("status") != "PendingPayment") return HandlerResult.Fail(null, "Only pending orders can be paid.");

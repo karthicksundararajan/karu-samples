@@ -101,28 +101,12 @@ public sealed class CommerceTests
     public void Each_line_is_rounded_to_a_cent_away_from_zero(bool included, double price, double rate, double vat) =>
         Assert.Equal((decimal)vat, Pricing.Line(new PriceInput(1, "X", "X", "Standard", (decimal)rate, (decimal)price, 1), included).Vat);
 
-    // Stock, ownership, payments
+    // Stock
 
     [Fact]
     public void Reserved_stock_cannot_exceed_on_hand()
     {
         var result = Host.Check("Catalogue.ValidStock", Host.Record("Catalogue.Stock", V(("onHand", 2), ("reserved", 3))));
-        Assert.False(result.Valid);
-    }
-
-    [Fact]
-    public void Ownership_uses_stable_subject_instead_of_display_name()
-    {
-        var result = new OwnCart().Filter(new RowFilterContext("Sales.Cart", "Alice", new HashSet<string> { "Customer" }) { Subject = "oidc:issuer|123" });
-        Assert.Contains("oidc:issuer|123", result!.ToJson());
-        Assert.DoesNotContain("Alice", result.ToJson());
-    }
-
-    [Fact]
-    public void Customer_cannot_supply_an_owner()
-    {
-        var result = Host.Handle("Customers.RegisterCustomer", Host.Record("Customers.Customer", V(("owner", "dev:bob.dev"))),
-            Host.Input("Customers.RegisterCustomer", V()), new HandlerServices(Host.Data("Customers.RegisterOwner"), "dev:alice.dev", Now));
         Assert.False(result.Valid);
     }
 
@@ -192,6 +176,15 @@ public sealed class CommerceTests
         var data = Catalogue("Sales.ChangeCart").OnQuery("CartById", [cart]);
         var result = Host.Handle("Sales.RemoveItem", cart, Host.Input("Sales.RemoveItem", V(("product", new RecordRef(2, "Mug")))), new HandlerServices(data, "dev:alice.dev", Now));
         Assert.Equal(new object?[] { 6L }, result.Children("lines")!.Select(l => l["id"]));
+    }
+
+    [Fact]
+    public void A_new_cart_cannot_carry_an_order()
+    {
+        var cart = Host.Record("Sales.Cart", V(("customer", new RecordRef(7, "Alice")), ("order", new RecordRef(3, "3")), ("status", "Open"),
+            ("lines", Array.Empty<Dictionary<string, object?>>())));
+        var result = Host.Handle("Sales.CreateCart", cart, Host.Input("Sales.CreateCart", V()), new HandlerServices(Catalogue("Sales.OpenCart"), "dev:alice.dev", Now));
+        Assert.Equal("order", Assert.Single(result.Errors).Field);
     }
 
     // Checkout
@@ -292,14 +285,6 @@ public sealed class CommerceTests
         Assert.False(result.Valid);
         Assert.Contains("cancel the order", Assert.Single(result.Errors).Message);
         Assert.Empty(data.Calls);
-    }
-
-    [Fact]
-    public void Another_customer_cannot_edit_an_order()
-    {
-        var result = Host.Handle("Sales.AddOrderItem", PendingOrder(Line(10, 2, 2, 12.35m)),
-            Host.Input("Sales.AddOrderItem", V(("product", new RecordRef(3, "Book")), ("quantity", 1))), new HandlerServices(Catalogue("Sales.EditOrder"), "dev:bob.dev", Now));
-        Assert.False(result.Valid);
     }
 
     // Replacement and refunds
@@ -431,7 +416,4 @@ public sealed class CommerceTests
         Has(attempt, ("outcome", "TimedOut"), ("kind", "Charge"), ("amount", 12.35m));
         Assert.Empty(data.Calls);
     }
-
-    [Fact]
-    public void System_can_read_orders_for_scheduled_expiry() => Assert.Null(new OwnOrder().Filter(new RowFilterContext("Sales.Order", null, new HashSet<string> { "System" })));
 }

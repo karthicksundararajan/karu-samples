@@ -11,7 +11,7 @@ entities:
       order: Order?
     children:
       lines: { entity: CartLine, readonlyWhen: { status: CheckedOut } }
-    rowFilter: OwnCart
+    ownership: { field: owner, staff: [Support, Admin] }
   CartLine:
     fields:
       product: Catalogue.Product
@@ -44,7 +44,7 @@ entities:
     children:
       lines: OrderLine
       vatBreakdown: OrderVat
-    rowFilter: OwnOrder
+    ownership: { field: owner, staff: [Support, Warehouse, Admin] }
   OrderLine:
     fields:
       product: Catalogue.Product
@@ -79,23 +79,13 @@ entities:
       outcome: { type: enum, required: true, values: [Succeeded, Declined, TimedOut], default: Declined }
       reference: { type: string, max: 200 }
       at: datetime
-    rowFilter: OwnPayment
+    ownership: { via: order }
 contracts:
-  OwnCart:
-    kind: rowFilter
-    entity: Cart
-  OwnOrder:
-    kind: rowFilter
-    entity: Order
-  OwnPayment:
-    kind: rowFilter
-    entity: PaymentAttempt
-  OpenOwnedCart:
+  OpenCart:
     kind: commandHandler
     input: Cart
     data:
       queries:
-      - Customers.CustomerById
       - Catalogue.ProductById
   ChangeCart:
     kind: commandHandler
@@ -247,7 +237,7 @@ commands:
   CreateCart:
     kind: create
     'on': Cart
-    handler: OpenOwnedCart
+    handler: OpenCart
   UpdateCart:
     kind: update
     'on': Cart

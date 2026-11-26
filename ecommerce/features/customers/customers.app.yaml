@@ -8,38 +8,11 @@ valueObjects:
 entities:
   Customer:
     fields:
-      owner:
-        type: string
-        max: 300
-        required: false
-        unique: true
-        readonlyWhen:
-          not:
-            field: owner
-            op: isNull
+      owner: { type: string, max: 300, unique: true }
       name: { type: string, max: 120, required: true }
       email: { type: string, max: 200, required: true }
       shipping: Address
-    rowFilter: OwnCustomer
-contracts:
-  OwnCustomer:
-    kind: rowFilter
-    entity: Customer
-  RegisterOwner:
-    kind: commandHandler
-    input: Customer
-  PreserveOwner:
-    kind: commandHandler
-    input: Customer
-commands:
-  RegisterCustomer:
-    kind: create
-    'on': Customer
-    handler: RegisterOwner
-  UpdateCustomer:
-    kind: update
-    'on': Customer
-    handler: PreserveOwner
+    ownership: { field: owner, staff: [Support, Admin] }
 queries:
   CustomerById:
     from: Customer

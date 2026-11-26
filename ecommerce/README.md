@@ -177,7 +177,7 @@ If the replacement is cancelled or expires, the original's `replacement` link is
 
 Known limitation: the original's goods stay allocated until the replacement is paid. A replacement therefore needs stock available on top of the original's quantities.
 
-Customer ownership is derived from Karu's authenticated subject, never submitted by clients. Customer-supplied profile references are verified on cart creation and checkout. Customers cannot invoke internal `[System]` commands or write order lines, VAT amounts, reservations, balances, totals or payment outcomes through generic CRUD. Cart lines accept only `product` and `quantity`. Staff access is limited by each feature's permission lists.
+Customers, carts, orders and payment attempts declare `ownership:`: the platform stamps the owner from the authenticated subject when a record is created, refuses an owner sent by a client, shows each customer only their own records (Support, Warehouse and Admin see all, as listed per entity), and accepts a reference to a customer profile or order only when it belongs to the caller. Customers cannot invoke internal `[System]` commands or write order lines, VAT amounts, reservations, balances, totals or payment outcomes through generic CRUD. Cart lines accept only `product` and `quantity`. Staff access is limited by each feature's permission lists.
 
 ## Tests
 

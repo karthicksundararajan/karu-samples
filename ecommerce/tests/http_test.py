@@ -69,7 +69,9 @@ def run(base, folder, postgres):
     assert ac['owner'] == 'dev:alice.dev'
     alice.create('customers', 'Customer', {'owner': 'dev:bob.dev', 'name': 'Spoof', 'email': 'x@example.test', 'shipping': address}, 422)
     bob.get('customers', 'Customer', ac['id'], 404)
-    alice.call('PUT', f"/api/data/customers/Customer/{ac['id']}", {'owner':'dev:bob.dev','name':'Alice','email':'alice@example.test','shipping':address}, 409)
+    alice.call('PUT', f"/api/data/customers/Customer/{ac['id']}", {'owner':'dev:bob.dev','name':'Alice','email':'alice@example.test','shipping':address}, 422)
+    assert alice.call('PUT', f"/api/data/customers/Customer/{ac['id']}", {'name':'Alice','email':'alice@example.test','shipping':address})['owner'] == 'dev:alice.dev'
+    assert [c['id'] for c in alice.rows('customers', 'Customer')] == [ac['id']]
     category = admin.create('catalogue', 'Category', {'name': 'Equipment'})
     assert category['taxClass'] == 'Standard', category
     books = admin.create('catalogue', 'Category', {'name': 'Books', 'taxClass': 'Reduced'})
@@ -92,7 +94,7 @@ def run(base, folder, postgres):
     edit = cart(alice, ac)
     current = alice.get('sales','Cart',edit['id'])
     first = current['lines'][0]
-    grid = {'owner': current['owner'], 'customer': ac['id'], 'order': None}
+    grid = {'customer': ac['id'], 'order': None}
     updated = alice.call('PUT', f"/api/data/sales/Cart/{edit['id']}", {**grid, 'lines': [
         {'id': first['id'], 'product': p['id'], 'quantity': 1}, {'product': p['id'], 'quantity': 2}, {'product': p2['id'], 'quantity': 1}]})
     lines = {l['product']['id']: l for l in updated['lines']}
@@ -113,13 +115,15 @@ def run(base, folder, postgres):
     checked = alice.command('sales','Checkout',c['id'],{'requestKey':'checkout-1'})
     oid = checked['order']['id']
     order = alice.get('sales','Order',oid)
+    bob.get('sales','Order',oid,404)
+    bob.command('sales','AddOrderItem',oid,{'product':p['id'],'quantity':1},404)
     assert order['total'] == '24.70' and order['currency'] == 'CHF' and order['status'] == 'PendingPayment', order
     # CH: the list prices include VAT, so the total is their sum and VAT is extracted from it.
     assert (order['pricesIncludeVAT'], order['subtotal'], order['totalExclVAT'], order['totalVAT']) == (True, '24.70', '22.85', '1.85'), order
     assert [(l['sku'], l['unitPrice'], l['quantity'], l['taxClass'], l['vatRate'], l['totalExclVAT'], l['totalVAT'], l['total']) for l in order['lines']] == [('SKU-1', '12.35', 2, 'Standard', '8.10', '22.85', '1.85', '24.70')], order
     assert [(v['taxClass'], v['rate'], v['total']) for v in order['vatBreakdown']] == [('Standard', '8.10', '24.70')], order
     # The checked-out cart's lines are read-only.
-    alice.call('PUT', f"/api/data/sales/Cart/{c['id']}", {'owner': 'dev:alice.dev', 'customer': ac['id'], 'order': oid, 'lines': []}, 409)
+    alice.call('PUT', f"/api/data/sales/Cart/{c['id']}", {'customer': ac['id'], 'order': oid, 'lines': []}, 409)
     # US: VAT is added on top of the list prices.
     us_cart = cart(bob, bc)
     us_order = bob.get('sales','Order', bob.command('sales','Checkout',us_cart['id'],{'requestKey':'us'})['order']['id'])
