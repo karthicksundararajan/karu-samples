@@ -1,4 +1,2 @@
 bindings:
-  Sales.Payments:
-    adapter: SimulatedPayments
-    timeout: PT1S
+  Sales.Payments: { adapter: SimulatedPayments, timeout: PT1S }

@@ -7,6 +7,7 @@ Follow the adjacent Karu `docs/guide/README.md`. Keep configuration in YAML and 
 - Unit tests: `export PATH="$HOME/.dotnet:$PATH" && dotnet test Ecommerce.slnx`
 - Model/scenarios: `./tools/karu validate . && ./tools/karu test .`
 - Migrations: `./tools/karu migrations check .`; generate changes with `migrations add`, never edit the snapshot.
+- Format: `./tools/karu fmt .` before committing (`./tools/karu fmt --check .` must pass). Shared types (`Money`, `Count`, `Units`) live in `app.yaml` and are used by bare name.
 - HTTP tests: `python3 tests/http_test.py`
 - PostgreSQL HTTP tests: set a dedicated empty `KARU_ECOMMERCE_TEST_POSTGRES`, then `python3 tests/http_test.py --postgres`.
 

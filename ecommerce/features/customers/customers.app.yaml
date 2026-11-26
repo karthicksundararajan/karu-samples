@@ -16,22 +16,10 @@ entities:
 queries:
   CustomerById:
     from: Customer
-    select:
-    - id
+    select: [id]
     params:
-      customerId:
-        type: int
-        required: true
+      customerId: { type: int, required: true }
     where:
-      id:
-        param: customerId
+      id: { param: customerId }
 permissions:
-  Customer:
-    read:
-    - Customer
-    - Support
-    - Admin
-    create:
-    - Customer
-    update:
-    - Customer
+  Customer: { read: [Customer, Support, Admin], create: [Customer], update: [Customer] }

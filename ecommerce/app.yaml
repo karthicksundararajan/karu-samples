@@ -1,14 +1,9 @@
 schemaVersion: 1
 name: ecommerce
 label: Ecommerce
-features:
-- catalogue
-- customers
-- tax
-- sales
-roles:
-- Customer
-- CatalogueManager
-- Warehouse
-- Support
-- Admin
+features: [catalogue, customers, tax, sales]
+roles: [Customer, CatalogueManager, Warehouse, Support, Admin]
+types:
+  Money: { type: decimal, precision: 12, scale: 2, min: 0 }
+  Count: { type: int, min: 0 }
+  Units: { type: int, min: 1 }

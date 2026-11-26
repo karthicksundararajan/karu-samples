@@ -1,4 +1,2 @@
 navigation:
-  - label: Customers
-    icon: users
-    items: [Customer]
+  - { label: Customers, icon: users, items: [Customer] }

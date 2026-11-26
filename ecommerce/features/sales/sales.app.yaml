@@ -10,7 +10,10 @@ entities:
       status: { type: enum, required: true, values: [Open, CheckedOut], default: Open }
       order: Order?
     children:
-      lines: { entity: CartLine, key: product, readonlyWhen: { status: CheckedOut } }
+      lines:
+        entity: CartLine
+        key: product
+        readonlyWhen: { status: CheckedOut }
     ownership: { field: owner, staff: [Support, Admin] }
   CartLine:
     fields:
@@ -25,10 +28,10 @@ entities:
       shipping: Customers.Address
       currency: { type: enum, required: true, values: [CHF], default: CHF }
       pricesIncludeVAT: { type: bool, required: true, renamedFrom: pricesIncludeVat }
-      subtotal: Catalogue.Money
-      totalExclVAT: { type: Catalogue.Money, required: true, renamedFrom: netTotal }
-      totalVAT: { type: Catalogue.Money, required: true, renamedFrom: vatTotal }
-      total: Catalogue.Money
+      subtotal: Money
+      totalExclVAT: { type: Money, required: true, renamedFrom: netTotal }
+      totalVAT: { type: Money, required: true, renamedFrom: vatTotal }
+      total: Money
       placedAt: datetime
       expiresAt: datetime
       status:
@@ -50,31 +53,31 @@ entities:
       sku: { type: string, max: 40, required: true }
       name: { type: string, max: 200, required: true }
       quantity: Quantity
-      unitPrice: Catalogue.Money
+      unitPrice: Money
       taxClass: Tax.TaxClass
       vatRate: Tax.Percent
-      totalExclVAT: { type: Catalogue.Money, required: true, renamedFrom: net }
-      totalVAT: { type: Catalogue.Money, required: true, renamedFrom: vat }
-      total: Catalogue.Money
+      totalExclVAT: { type: Money, required: true, renamedFrom: net }
+      totalVAT: { type: Money, required: true, renamedFrom: vat }
+      total: Money
   OrderVat:
     fields:
       taxClass: Tax.TaxClass
       rate: Tax.Percent
-      totalExclVAT: { type: Catalogue.Money, required: true, renamedFrom: net }
-      totalVAT: { type: Catalogue.Money, required: true, renamedFrom: vat }
-      total: { type: Catalogue.Money, required: true, renamedFrom: gross }
+      totalExclVAT: { type: Money, required: true, renamedFrom: net }
+      totalVAT: { type: Money, required: true, renamedFrom: vat }
+      total: { type: Money, required: true, renamedFrom: gross }
   Reservation:
     fields:
       order: Order
       stock: Catalogue.Stock
-      quantity: Catalogue.Units
+      quantity: Units
       status: { type: enum, required: true, values: [Held, Consumed, Released], default: Held }
   PaymentAttempt:
     fields:
       order: Order
       attemptKey: { type: string, max: 200, required: true, unique: true }
       kind: { type: enum, required: true, values: [Charge, Refund], default: Charge }
-      amount: Catalogue.Money
+      amount: Money
       outcome: { type: enum, required: true, values: [Succeeded, Declined, TimedOut], default: Declined }
       reference: { type: string, max: 200 }
       at: datetime
@@ -83,103 +86,61 @@ contracts:
   OpenCart:
     kind: commandHandler
     input: Cart
-    data:
-      queries:
-      - Catalogue.ProductById
+    data: { queries: [Catalogue.ProductById] }
   ChangeCart:
     kind: commandHandler
     input: Cart
-    data:
-      queries:
-      - Catalogue.ProductById
-      - CartById
+    data: { queries: [Catalogue.ProductById, CartById] }
   PlaceOrder:
     kind: commandHandler
     input: Cart
     data:
       queries:
-      - Customers.CustomerById
-      - Catalogue.ProductById
-      - Catalogue.StockByProduct
-      - Catalogue.CategoryById
-      - Tax.CountryByCode
-      - Tax.VatRatesFor
-      creates:
-      - Order
-      - Reservation
-      commands:
-      - Catalogue.ReserveStock
-      - SealCart
+        - Customers.CustomerById
+        - Catalogue.ProductById
+        - Catalogue.StockByProduct
+        - Catalogue.CategoryById
+        - Tax.CountryByCode
+        - Tax.VatRatesFor
+      creates: [Order, Reservation]
+      commands: [Catalogue.ReserveStock, SealCart]
   EditOrder:
     kind: commandHandler
     input: Order
     data:
       queries:
-      - HeldReservations
-      - Catalogue.ProductById
-      - Catalogue.StockByProduct
-      - Catalogue.CategoryById
-      - Tax.CountryByCode
-      - Tax.VatRatesFor
-      creates:
-      - Reservation
-      commands:
-      - Catalogue.ReserveStock
-      - Catalogue.ReleaseStock
-      - ReleaseReservation
+        - HeldReservations
+        - Catalogue.ProductById
+        - Catalogue.StockByProduct
+        - Catalogue.CategoryById
+        - Tax.CountryByCode
+        - Tax.VatRatesFor
+      creates: [Reservation]
+      commands: [Catalogue.ReserveStock, Catalogue.ReleaseStock, ReleaseReservation]
   StartReplacement:
     kind: commandHandler
     input: Order
     data:
-      queries:
-      - Catalogue.StockByProduct
-      - Tax.CountryByCode
-      - Tax.VatRatesFor
-      creates:
-      - Order
-      - Reservation
-      commands:
-      - Catalogue.ReserveStock
+      queries: [Catalogue.StockByProduct, Tax.CountryByCode, Tax.VatRatesFor]
+      creates: [Order, Reservation]
+      commands: [Catalogue.ReserveStock]
   TakePayment:
     kind: commandHandler
     input: Order
-    data:
-      creates:
-      - PaymentAttempt
-      commands:
-      - ConfirmOrder
-    uses:
-    - Payments
+    data: { creates: [PaymentAttempt], commands: [ConfirmOrder] }
+    uses: [Payments]
   ConsumeReservations:
     kind: commandHandler
     input: Order
-    data:
-      queries:
-      - HeldReservations
-      commands:
-      - Catalogue.ConsumeStock
-      - ConsumeReservation
-      - SupersedeOrder
+    data: { queries: [HeldReservations], commands: [Catalogue.ConsumeStock, ConsumeReservation, SupersedeOrder] }
   ReleaseReservations:
     kind: commandHandler
     input: Order
-    data:
-      queries:
-      - HeldReservations
-      commands:
-      - Catalogue.ReleaseStock
-      - ReleaseReservation
-      - UnlinkReplacement
+    data: { queries: [HeldReservations], commands: [Catalogue.ReleaseStock, ReleaseReservation, UnlinkReplacement] }
   ExpireReservations:
     kind: commandHandler
     input: Order
-    data:
-      queries:
-      - HeldReservations
-      commands:
-      - Catalogue.ReleaseStock
-      - ReleaseReservation
-      - UnlinkReplacement
+    data: { queries: [HeldReservations], commands: [Catalogue.ReleaseStock, ReleaseReservation, UnlinkReplacement] }
   ClearReplacement:
     kind: commandHandler
     input: Order
@@ -187,346 +148,232 @@ contracts:
     kind: commandHandler
     input: Order
     data:
-      queries:
-      - ConsumedReservations
-      - PaymentByKey
-      creates:
-      - PaymentAttempt
-      commands:
-      - Catalogue.ReturnStock
-    uses:
-    - Payments
+      queries: [ConsumedReservations, PaymentByKey]
+      creates: [PaymentAttempt]
+      commands: [Catalogue.ReturnStock]
+    uses: [Payments]
   RefundOrder:
     kind: commandHandler
     input: Order
     data:
-      queries:
-      - ConsumedReservations
-      - PaymentByKey
-      creates:
-      - PaymentAttempt
-      commands:
-      - Catalogue.ReturnStock
-    uses:
-    - Payments
+      queries: [ConsumedReservations, PaymentByKey]
+      creates: [PaymentAttempt]
+      commands: [Catalogue.ReturnStock]
+    uses: [Payments]
 stateMachines:
-  Cart.status:
-    Open:
-    - CheckedOut
+  Cart.status: { Open: [CheckedOut] }
   Order.status:
-    PendingPayment:
-    - Paid
-    - Cancelled
-    - Expired
-    Paid:
-    - Shipped
-    - Cancelled
-    - Replaced
-    Shipped:
-    - Delivered
-  Reservation.status:
-    Held:
-    - Consumed
-    - Released
+    PendingPayment: [Paid, Cancelled, Expired]
+    Paid: [Shipped, Cancelled, Replaced]
+    Shipped: [Delivered]
+  Reservation.status: { Held: [Consumed, Released] }
 commands:
   CreateCart:
     kind: create
-    'on': Cart
+    on: Cart
     handler: OpenCart
   UpdateCart:
     kind: update
-    'on': Cart
+    on: Cart
     handler: ChangeCart
-    availableWhen:
-      status: Open
+    availableWhen: { status: Open }
   AddItem:
-    'on': Cart
+    on: Cart
     handler: ChangeCart
-    collection: { name: lines, action: add, merge: { quantity: sum } }
-    availableWhen:
-      status: Open
+    collection:
+      name: lines
+      action: add
+      merge: { quantity: sum }
+    availableWhen: { status: Open }
   ChangeItem:
-    'on': Cart
+    on: Cart
     handler: ChangeCart
-    collection: { name: lines, action: change, merge: { quantity: sum } }
-    availableWhen:
-      status: Open
+    collection:
+      name: lines
+      action: change
+      merge: { quantity: sum }
+    availableWhen: { status: Open }
   RemoveItem:
-    'on': Cart
+    on: Cart
     collection: { name: lines, action: remove }
-    availableWhen:
-      status: Open
+    availableWhen: { status: Open }
   SealCart:
-    'on': Cart
-    transition:
-      from: Open
-      to: CheckedOut
+    on: Cart
+    transition: { from: Open, to: CheckedOut }
   Checkout:
-    'on': Cart
+    on: Cart
     handler: PlaceOrder
     idempotent: requestKey
     input:
       requestKey: RequestKey
-    availableWhen:
-      status: Open
+    availableWhen: { status: Open }
   AddOrderItem:
-    'on': Order
+    on: Order
     handler: EditOrder
-    collection: { name: lines, action: add, fields: [quantity], merge: { quantity: sum } }
-    availableWhen:
-      status: PendingPayment
+    collection:
+      name: lines
+      action: add
+      fields: [quantity]
+      merge: { quantity: sum }
+    availableWhen: { status: PendingPayment }
   ChangeOrderItem:
-    'on': Order
+    on: Order
     handler: EditOrder
-    collection: { name: lines, action: change, fields: [quantity], merge: { quantity: sum } }
-    availableWhen:
-      status: PendingPayment
+    collection:
+      name: lines
+      action: change
+      fields: [quantity]
+      merge: { quantity: sum }
+    availableWhen: { status: PendingPayment }
   RemoveOrderItem:
-    'on': Order
+    on: Order
     handler: EditOrder
     collection: { name: lines, action: remove }
-    availableWhen:
-      status: PendingPayment
+    availableWhen: { status: PendingPayment }
   ReplaceOrder:
-    'on': Order
+    on: Order
     handler: StartReplacement
     idempotent: requestKey
     input:
       requestKey: RequestKey
     availableWhen:
       all:
-      - status: Paid
-      - { field: replacement, op: isNull }
+        - status: Paid
+        - field: replacement
+          op: isNull
   PayOrder:
-    'on': Order
+    on: Order
     handler: TakePayment
     idempotent: attemptKey
     input:
       attemptKey: RequestKey
       method: { type: enum, required: true, values: [Success, Decline, Timeout], default: Success }
-    availableWhen:
-      status: PendingPayment
+    availableWhen: { status: PendingPayment }
   ConfirmOrder:
-    'on': Order
+    on: Order
     handler: ConsumeReservations
-    transition:
-      from: PendingPayment
-      to: Paid
+    transition: { from: PendingPayment, to: Paid }
   CancelOrder:
-    'on': Order
+    on: Order
     handler: ReleaseReservations
-    transition:
-      from: PendingPayment
-      to: Cancelled
+    transition: { from: PendingPayment, to: Cancelled }
   ExpireOrder:
-    'on': Order
+    on: Order
     handler: ExpireReservations
-    transition:
-      from: PendingPayment
-      to: Expired
+    transition: { from: PendingPayment, to: Expired }
   CancelPaidOrder:
-    'on': Order
+    on: Order
     handler: RefundOrder
-    transition:
-      from: Paid
-      to: Cancelled
-    availableWhen:
-      field: replacement
-      op: isNull
+    transition: { from: Paid, to: Cancelled }
+    availableWhen: { field: replacement, op: isNull }
   SupersedeOrder:
-    'on': Order
+    on: Order
     handler: SettleReplacedOrder
-    transition:
-      from: Paid
-      to: Replaced
+    transition: { from: Paid, to: Replaced }
   UnlinkReplacement:
-    'on': Order
+    on: Order
     handler: ClearReplacement
     input:
       replacement: Order
   ConsumeReservation:
-    'on': Reservation
-    transition:
-      from: Held
-      to: Consumed
+    on: Reservation
+    transition: { from: Held, to: Consumed }
   ReleaseReservation:
-    'on': Reservation
-    transition:
-      from: Held
-      to: Released
+    on: Reservation
+    transition: { from: Held, to: Released }
   ShipOrder:
-    'on': Order
+    on: Order
     input:
       carrier: { type: string, max: 100, required: true }
       tracking: { type: string, max: 120, required: true }
-    transition:
-      from: Paid
-      to: Shipped
-    availableWhen:
-      field: replacement
-      op: isNull
+    transition: { from: Paid, to: Shipped }
+    availableWhen: { field: replacement, op: isNull }
     sets:
       carrier: $input.carrier
       tracking: $input.tracking
   DeliverOrder:
-    'on': Order
-    transition:
-      from: Shipped
-      to: Delivered
+    on: Order
+    transition: { from: Shipped, to: Delivered }
 queries:
   OrderPayments:
     from: PaymentAttempt
     select: [id, kind, outcome, amount, reference, at]
-    params: { orderId: { ref: Order, required: true } }
-    where: { order: { param: orderId } }
+    params:
+      orderId: { ref: Order, required: true }
+    where:
+      order: { param: orderId }
     orderBy: [id]
   CartById:
     from: Cart
-    select:
-    - id
+    select: [id]
     params:
-      cartId:
-        type: int
-        required: true
+      cartId: { type: int, required: true }
     where:
-      id:
-        param: cartId
+      id: { param: cartId }
   HeldReservations:
     from: Reservation
-    select:
-    - id
+    select: [id]
     params:
-      orderId:
-        ref: Order
-        required: true
+      orderId: { ref: Order, required: true }
     where:
       all:
-      - order:
-          param: orderId
-      - status: Held
-    orderBy:
-    - id
+        - order: { param: orderId }
+        - status: Held
+    orderBy: [id]
   ConsumedReservations:
     from: Reservation
-    select:
-    - id
+    select: [id]
     params:
-      orderId:
-        ref: Order
-        required: true
+      orderId: { ref: Order, required: true }
     where:
       all:
-      - order:
-          param: orderId
-      - status: Consumed
-    orderBy:
-    - id
+        - order: { param: orderId }
+        - status: Consumed
+    orderBy: [id]
   PaymentByKey:
     from: PaymentAttempt
-    select:
-    - id
+    select: [id]
     params:
-      key:
-        type: string
-        required: true
+      key: { type: string, required: true }
     where:
-      attemptKey:
-        param: key
-    orderBy:
-    - id
+      attemptKey: { param: key }
+    orderBy: [id]
   PendingOrders:
     from: Order
-    select:
-    - id
-    - expiresAt
+    select: [id, expiresAt]
     where:
       status: PendingPayment
-    orderBy:
-    - id
+    orderBy: [id]
   MyOrders:
     from: Order
-    select:
-    - id
-    - total
-    - currency
-    - status
-    - placedAt
+    select: [id, total, currency, status, placedAt]
     orderBy:
-    - field: id
-      dir: desc
+      - { field: id, dir: desc }
 permissions:
-  AddItem:
-  - Customer
-  ChangeItem:
-  - Customer
-  RemoveItem:
-  - Customer
-  SealCart:
-  - System
-  Checkout:
-  - Customer
-  AddOrderItem:
-  - Customer
-  ChangeOrderItem:
-  - Customer
-  RemoveOrderItem:
-  - Customer
-  ReplaceOrder:
-  - Customer
-  - Support
-  - Admin
-  PayOrder:
-  - Customer
-  ConfirmOrder:
-  - System
-  CancelOrder:
-  - Customer
-  - Support
-  - Admin
-  CancelPaidOrder:
-  - Customer
-  - Support
-  - Admin
-  ExpireOrder:
-  - System
-  SupersedeOrder:
-  - System
-  UnlinkReplacement:
-  - System
-  ConsumeReservation:
-  - System
-  ReleaseReservation:
-  - System
-  ShipOrder:
-  - Warehouse
-  - Admin
-  DeliverOrder:
-  - Warehouse
-  - Admin
-  Cart:
-    read:
-    - Customer
-    - Support
-    - Admin
-    create:
-    - Customer
-    update:
-    - Customer
-  Order:
-    read:
-    - Customer
-    - Support
-    - Warehouse
-    - Admin
-  Reservation:
-    read:
-    - Warehouse
-    - Admin
-  PaymentAttempt:
-    read:
-    - Customer
-    - Support
-    - Admin
+  AddItem: [Customer]
+  ChangeItem: [Customer]
+  RemoveItem: [Customer]
+  SealCart: [System]
+  Checkout: [Customer]
+  AddOrderItem: [Customer]
+  ChangeOrderItem: [Customer]
+  RemoveOrderItem: [Customer]
+  ReplaceOrder: [Customer, Support, Admin]
+  PayOrder: [Customer]
+  ConfirmOrder: [System]
+  CancelOrder: [Customer, Support, Admin]
+  CancelPaidOrder: [Customer, Support, Admin]
+  ExpireOrder: [System]
+  SupersedeOrder: [System]
+  UnlinkReplacement: [System]
+  ConsumeReservation: [System]
+  ReleaseReservation: [System]
+  ShipOrder: [Warehouse, Admin]
+  DeliverOrder: [Warehouse, Admin]
+  Cart: { read: [Customer, Support, Admin], create: [Customer], update: [Customer] }
+  Order: { read: [Customer, Support, Warehouse, Admin] }
+  Reservation: { read: [Warehouse, Admin] }
+  PaymentAttempt: { read: [Customer, Support, Admin] }
 ports:
   Payments:
     kind: connector
@@ -536,13 +383,9 @@ ports:
           key: string
           amount: decimal
           method: string
-        output:
-          outcome: string
-          reference: string
+        output: { outcome: string, reference: string }
       Refund:
         input:
           key: string
           amount: decimal
-        output:
-          outcome: string
-          reference: string
+        output: { outcome: string, reference: string }

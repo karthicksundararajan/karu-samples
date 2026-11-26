@@ -1,23 +1,8 @@
 devIdentity:
   users:
-  - name: alice.dev
-    roles:
-    - Customer
-  - name: bob.dev
-    roles:
-    - Customer
-  - name: catalogue.dev
-    roles:
-    - CatalogueManager
-  - name: warehouse.dev
-    roles:
-    - Warehouse
-  - name: support.dev
-    roles:
-    - Support
-  - name: admin.dev
-    roles:
-    - CatalogueManager
-    - Warehouse
-    - Support
-    - Admin
+    - { name: alice.dev, roles: [Customer] }
+    - { name: bob.dev, roles: [Customer] }
+    - { name: catalogue.dev, roles: [CatalogueManager] }
+    - { name: warehouse.dev, roles: [Warehouse] }
+    - { name: support.dev, roles: [Support] }
+    - { name: admin.dev, roles: [CatalogueManager, Warehouse, Support, Admin] }

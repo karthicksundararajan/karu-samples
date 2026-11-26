@@ -5,6 +5,6 @@
   <ItemGroup>
     <PackageReference Include="Karu.Extensions.Sdk" Version="$(KaruVersion)" />
     <PackageReference Include="Karu.Extensions.Generator" Version="$(KaruVersion)" PrivateAssets="all" />
-    <AdditionalFiles Include="$(KaruModelRoot)/features/**/*.app.yaml" />
+    <AdditionalFiles Include="$(KaruModelRoot)/app.yaml;$(KaruModelRoot)/features/**/*.app.yaml" />
   </ItemGroup>
 </Project>

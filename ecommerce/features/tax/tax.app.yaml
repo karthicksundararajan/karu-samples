@@ -16,52 +16,25 @@ entities:
 queries:
   CountryByCode:
     from: Country
-    select:
-    - id
+    select: [id]
     params:
-      code:
-        type: string
-        required: true
+      code: { type: string, required: true }
     where:
-      code:
-        param: code
+      code: { param: code }
   VatRatesFor:
     from: VatRate
-    select:
-    - id
+    select: [id]
     params:
-      countryId:
-        ref: Country
-        required: true
+      countryId: { ref: Country, required: true }
     where:
-      country:
-        param: countryId
-    orderBy:
-    - id
+      country: { param: countryId }
+    orderBy: [id]
 permissions:
   Country:
-    read:
-    - Customer
-    - CatalogueManager
-    - Warehouse
-    - Support
-    - Admin
-    create:
-    - CatalogueManager
-    - Admin
-    update:
-    - CatalogueManager
-    - Admin
+    read: [Customer, CatalogueManager, Warehouse, Support, Admin]
+    create: [CatalogueManager, Admin]
+    update: [CatalogueManager, Admin]
   VatRate:
-    read:
-    - Customer
-    - CatalogueManager
-    - Warehouse
-    - Support
-    - Admin
-    create:
-    - CatalogueManager
-    - Admin
-    update:
-    - CatalogueManager
-    - Admin
+    read: [Customer, CatalogueManager, Warehouse, Support, Admin]
+    create: [CatalogueManager, Admin]
+    update: [CatalogueManager, Admin]

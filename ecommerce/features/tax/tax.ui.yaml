@@ -1,4 +1,2 @@
 navigation:
-  - label: Tax
-    icon: receipt
-    items: [Country, VatRate]
+  - { label: Tax, icon: receipt, items: [Country, VatRate] }

@@ -1,734 +1,491 @@
 scenarios:
-- name: Customers can cancel their unpaid order
-  given:
-    Customers.Customer:
-    - owner: dev:alice.dev
-      name: Alice
-      email: alice@example.test
-      shipping:
-        line1: Main 1
-        city: Zurich
-        postalCode: '8000'
-        country: CH
-    Catalogue.Category:
-    - name: Equipment
-      taxClass: Standard
-    Catalogue.Product:
-    - sku: SKU-1
-      name: Mug
-      category: Equipment
-      price: '12.35'
-      status: Active
-    Catalogue.Stock:
-    - product: SKU-1
-      stockKey: STOCK-1
-      onHand: 10
-      reserved: 1
-    Tax.Country:
-    - code: CH
-      name: Switzerland
-      pricesIncludeVAT: true
-    Tax.VatRate:
-    - rateKey: CH:Standard
-      country: CH
-      taxClass: Standard
-      rate: '8.10'
-    Order:
-    - owner: dev:alice.dev
-      cartId: ORDER-1
-      customer: dev:alice.dev
-      shipping:
-        line1: Main 1
-        city: Zurich
-        postalCode: '8000'
-        country: CH
-      pricesIncludeVAT: true
-      subtotal: '12.35'
-      totalExclVAT: '11.42'
-      totalVAT: '0.93'
-      total: '12.35'
-      placedAt: '2026-11-22T12:00:00Z'
-      expiresAt: '2026-11-22T12:30:00Z'
-      status: PendingPayment
-      lines:
-      - product: SKU-1
-        sku: SKU-1
-        name: Mug
-        taxClass: Standard
-        vatRate: '8.10'
-        unitPrice: '12.35'
+  - name: Customers can cancel their unpaid order
+    given:
+      Customers.Customer:
+        - owner: dev:alice.dev
+          name: Alice
+          email: alice@example.test
+          shipping: { line1: Main 1, city: Zurich, postalCode: '8000', country: CH }
+      Catalogue.Category:
+        - { name: Equipment, taxClass: Standard }
+      Catalogue.Product:
+        - { sku: SKU-1, name: Mug, category: Equipment, price: '12.35', status: Active }
+      Catalogue.Stock:
+        - { product: SKU-1, stockKey: STOCK-1, onHand: 10, reserved: 1 }
+      Tax.Country:
+        - { code: CH, name: Switzerland, pricesIncludeVAT: true }
+      Tax.VatRate:
+        - { rateKey: CH:Standard, country: CH, taxClass: Standard, rate: '8.10' }
+      Order:
+        - owner: dev:alice.dev
+          cartId: ORDER-1
+          customer: dev:alice.dev
+          shipping: { line1: Main 1, city: Zurich, postalCode: '8000', country: CH }
+          pricesIncludeVAT: true
+          subtotal: '12.35'
+          totalExclVAT: '11.42'
+          totalVAT: '0.93'
+          total: '12.35'
+          placedAt: 2026-11-22T12:00:00Z
+          expiresAt: 2026-11-22T12:30:00Z
+          status: PendingPayment
+          lines:
+            - product: SKU-1
+              sku: SKU-1
+              name: Mug
+              taxClass: Standard
+              vatRate: '8.10'
+              unitPrice: '12.35'
+              quantity: 1
+              totalExclVAT: '11.42'
+              totalVAT: '0.93'
+              total: '12.35'
+          vatBreakdown:
+            - { taxClass: Standard, rate: '8.10', totalExclVAT: '11.42', totalVAT: '0.93', total: '12.35' }
+    when:
+      command: CancelOrder
+      on: ORDER-1
+      as: { user: alice.dev }
+    expect:
+      Order:
+        - { cartId: ORDER-1, status: Cancelled }
+  - name: Customers cannot ship an order
+    given:
+      Customers.Customer:
+        - owner: dev:alice.dev
+          name: Alice
+          email: alice@example.test
+          shipping: { line1: Main 1, city: Zurich, postalCode: '8000', country: CH }
+      Catalogue.Category:
+        - { name: Equipment, taxClass: Standard }
+      Catalogue.Product:
+        - { sku: SKU-1, name: Mug, category: Equipment, price: '12.35', status: Active }
+      Catalogue.Stock:
+        - { product: SKU-1, stockKey: STOCK-1, onHand: 10, reserved: 1 }
+      Tax.Country:
+        - { code: CH, name: Switzerland, pricesIncludeVAT: true }
+      Tax.VatRate:
+        - { rateKey: CH:Standard, country: CH, taxClass: Standard, rate: '8.10' }
+      Order:
+        - owner: dev:alice.dev
+          cartId: ORDER-1
+          customer: dev:alice.dev
+          shipping: { line1: Main 1, city: Zurich, postalCode: '8000', country: CH }
+          pricesIncludeVAT: true
+          subtotal: '12.35'
+          totalExclVAT: '11.42'
+          totalVAT: '0.93'
+          total: '12.35'
+          placedAt: 2026-11-22T12:00:00Z
+          expiresAt: 2026-11-22T12:30:00Z
+          status: PendingPayment
+          lines:
+            - product: SKU-1
+              sku: SKU-1
+              name: Mug
+              taxClass: Standard
+              vatRate: '8.10'
+              unitPrice: '12.35'
+              quantity: 1
+              totalExclVAT: '11.42'
+              totalVAT: '0.93'
+              total: '12.35'
+          vatBreakdown:
+            - { taxClass: Standard, rate: '8.10', totalExclVAT: '11.42', totalVAT: '0.93', total: '12.35' }
+    when:
+      command: ShipOrder
+      on: ORDER-1
+      input:
+        carrier: Manual
+        tracking: CH-1
+      as: { user: alice.dev }
+    expect: { forbidden: true }
+  - name: Unpaid orders cannot be delivered
+    given:
+      Customers.Customer:
+        - owner: dev:alice.dev
+          name: Alice
+          email: alice@example.test
+          shipping: { line1: Main 1, city: Zurich, postalCode: '8000', country: CH }
+      Catalogue.Category:
+        - { name: Equipment, taxClass: Standard }
+      Catalogue.Product:
+        - { sku: SKU-1, name: Mug, category: Equipment, price: '12.35', status: Active }
+      Catalogue.Stock:
+        - { product: SKU-1, stockKey: STOCK-1, onHand: 10, reserved: 1 }
+      Tax.Country:
+        - { code: CH, name: Switzerland, pricesIncludeVAT: true }
+      Tax.VatRate:
+        - { rateKey: CH:Standard, country: CH, taxClass: Standard, rate: '8.10' }
+      Order:
+        - owner: dev:alice.dev
+          cartId: ORDER-1
+          customer: dev:alice.dev
+          shipping: { line1: Main 1, city: Zurich, postalCode: '8000', country: CH }
+          pricesIncludeVAT: true
+          subtotal: '12.35'
+          totalExclVAT: '11.42'
+          totalVAT: '0.93'
+          total: '12.35'
+          placedAt: 2026-11-22T12:00:00Z
+          expiresAt: 2026-11-22T12:30:00Z
+          status: PendingPayment
+          lines:
+            - product: SKU-1
+              sku: SKU-1
+              name: Mug
+              taxClass: Standard
+              vatRate: '8.10'
+              unitPrice: '12.35'
+              quantity: 1
+              totalExclVAT: '11.42'
+              totalVAT: '0.93'
+              total: '12.35'
+          vatBreakdown:
+            - { taxClass: Standard, rate: '8.10', totalExclVAT: '11.42', totalVAT: '0.93', total: '12.35' }
+    when:
+      command: DeliverOrder
+      on: ORDER-1
+      as: { user: warehouse.dev }
+    expect:
+      rejected: true
+      errors:
+        - { rule: notAvailable }
+  - name: A declined payment leaves the order pending
+    now: 2026-11-22T12:01:00Z
+    given:
+      Customers.Customer:
+        - owner: dev:alice.dev
+          name: Alice
+          email: alice@example.test
+          shipping: { line1: Main 1, city: Zurich, postalCode: '8000', country: CH }
+      Catalogue.Category:
+        - { name: Equipment, taxClass: Standard }
+      Catalogue.Product:
+        - { sku: SKU-1, name: Mug, category: Equipment, price: '12.35', status: Active }
+      Catalogue.Stock:
+        - { product: SKU-1, stockKey: STOCK-1, onHand: 10, reserved: 1 }
+      Tax.Country:
+        - { code: CH, name: Switzerland, pricesIncludeVAT: true }
+      Tax.VatRate:
+        - { rateKey: CH:Standard, country: CH, taxClass: Standard, rate: '8.10' }
+      Order:
+        - owner: dev:alice.dev
+          cartId: ORDER-1
+          customer: dev:alice.dev
+          shipping: { line1: Main 1, city: Zurich, postalCode: '8000', country: CH }
+          pricesIncludeVAT: true
+          subtotal: '12.35'
+          totalExclVAT: '11.42'
+          totalVAT: '0.93'
+          total: '12.35'
+          placedAt: 2026-11-22T12:00:00Z
+          expiresAt: 2026-11-22T12:30:00Z
+          status: PendingPayment
+          lines:
+            - product: SKU-1
+              sku: SKU-1
+              name: Mug
+              taxClass: Standard
+              vatRate: '8.10'
+              unitPrice: '12.35'
+              quantity: 1
+              totalExclVAT: '11.42'
+              totalVAT: '0.93'
+              total: '12.35'
+          vatBreakdown:
+            - { taxClass: Standard, rate: '8.10', totalExclVAT: '11.42', totalVAT: '0.93', total: '12.35' }
+    when:
+      command: PayOrder
+      on: ORDER-1
+      input:
+        attemptKey: decline
+        method: Decline
+      as: { user: alice.dev }
+    expect:
+      Order:
+        - { cartId: ORDER-1, status: PendingPayment }
+  - name: A retried payment with the same key runs once
+    now: 2026-11-22T12:01:00Z
+    given:
+      Customers.Customer:
+        - owner: dev:alice.dev
+          name: Alice
+          email: alice@example.test
+          shipping: { line1: Main 1, city: Zurich, postalCode: '8000', country: CH }
+      Catalogue.Category:
+        - { name: Equipment, taxClass: Standard }
+      Catalogue.Product:
+        - { sku: SKU-1, name: Mug, category: Equipment, price: '12.35', status: Active }
+      Catalogue.Stock:
+        - { product: SKU-1, stockKey: STOCK-1, onHand: 10, reserved: 1 }
+      Tax.Country:
+        - { code: CH, name: Switzerland, pricesIncludeVAT: true }
+      Tax.VatRate:
+        - { rateKey: CH:Standard, country: CH, taxClass: Standard, rate: '8.10' }
+      Order:
+        - owner: dev:alice.dev
+          cartId: ORDER-1
+          customer: dev:alice.dev
+          shipping: { line1: Main 1, city: Zurich, postalCode: '8000', country: CH }
+          pricesIncludeVAT: true
+          subtotal: '12.35'
+          totalExclVAT: '11.42'
+          totalVAT: '0.93'
+          total: '12.35'
+          placedAt: 2026-11-22T12:00:00Z
+          expiresAt: 2026-11-22T12:30:00Z
+          status: PendingPayment
+          lines:
+            - product: SKU-1
+              sku: SKU-1
+              name: Mug
+              taxClass: Standard
+              vatRate: '8.10'
+              unitPrice: '12.35'
+              quantity: 1
+              totalExclVAT: '11.42'
+              totalVAT: '0.93'
+              total: '12.35'
+          vatBreakdown:
+            - { taxClass: Standard, rate: '8.10', totalExclVAT: '11.42', totalVAT: '0.93', total: '12.35' }
+    when:
+      - command: PayOrder
+        on: ORDER-1
+        input:
+          attemptKey: decline
+          method: Decline
+        as: { user: alice.dev }
+      - command: PayOrder
+        on: ORDER-1
+        input:
+          attemptKey: decline
+          method: Decline
+        as: { user: alice.dev }
+    expect:
+      count: { PaymentAttempt: 1 }
+      Order:
+        - { cartId: ORDER-1, status: PendingPayment }
+  - name: Customers can add to a pending order and keep its price snapshot
+    now: 2026-11-22T12:01:00Z
+    given:
+      Customers.Customer:
+        - owner: dev:alice.dev
+          name: Alice
+          email: alice@example.test
+          shipping: { line1: Main 1, city: Zurich, postalCode: '8000', country: CH }
+      Catalogue.Category:
+        - { name: Equipment, taxClass: Standard }
+      Catalogue.Product:
+        - { sku: SKU-1, name: Mug, category: Equipment, price: '12.35', status: Active }
+      Catalogue.Stock:
+        - { product: SKU-1, stockKey: STOCK-1, onHand: 10, reserved: 1 }
+      Tax.Country:
+        - { code: CH, name: Switzerland, pricesIncludeVAT: true }
+      Tax.VatRate:
+        - { rateKey: CH:Standard, country: CH, taxClass: Standard, rate: '8.10' }
+      Order:
+        - owner: dev:alice.dev
+          cartId: ORDER-1
+          customer: dev:alice.dev
+          shipping: { line1: Main 1, city: Zurich, postalCode: '8000', country: CH }
+          pricesIncludeVAT: true
+          subtotal: '12.35'
+          totalExclVAT: '11.42'
+          totalVAT: '0.93'
+          total: '12.35'
+          placedAt: 2026-11-22T12:00:00Z
+          expiresAt: 2026-11-22T12:30:00Z
+          status: PendingPayment
+          lines:
+            - product: SKU-1
+              sku: SKU-1
+              name: Mug
+              taxClass: Standard
+              vatRate: '8.10'
+              unitPrice: '12.35'
+              quantity: 1
+              totalExclVAT: '11.42'
+              totalVAT: '0.93'
+              total: '12.35'
+          vatBreakdown:
+            - { taxClass: Standard, rate: '8.10', totalExclVAT: '11.42', totalVAT: '0.93', total: '12.35' }
+    when:
+      command: AddOrderItem
+      on: ORDER-1
+      input:
+        product: SKU-1
         quantity: 1
-        totalExclVAT: '11.42'
-        totalVAT: '0.93'
-        total: '12.35'
-      vatBreakdown:
-      - taxClass: Standard
-        rate: '8.10'
-        totalExclVAT: '11.42'
-        totalVAT: '0.93'
-        total: '12.35'
-  when:
-    command: CancelOrder
-    'on': ORDER-1
-    as:
-      user: alice.dev
-  expect:
-    Order:
-    - cartId: ORDER-1
-      status: Cancelled
-- name: Customers cannot ship an order
-  given:
-    Customers.Customer:
-    - owner: dev:alice.dev
-      name: Alice
-      email: alice@example.test
-      shipping:
-        line1: Main 1
-        city: Zurich
-        postalCode: '8000'
-        country: CH
-    Catalogue.Category:
-    - name: Equipment
-      taxClass: Standard
-    Catalogue.Product:
-    - sku: SKU-1
-      name: Mug
-      category: Equipment
-      price: '12.35'
-      status: Active
-    Catalogue.Stock:
-    - product: SKU-1
-      stockKey: STOCK-1
-      onHand: 10
-      reserved: 1
-    Tax.Country:
-    - code: CH
-      name: Switzerland
-      pricesIncludeVAT: true
-    Tax.VatRate:
-    - rateKey: CH:Standard
-      country: CH
-      taxClass: Standard
-      rate: '8.10'
-    Order:
-    - owner: dev:alice.dev
-      cartId: ORDER-1
-      customer: dev:alice.dev
-      shipping:
-        line1: Main 1
-        city: Zurich
-        postalCode: '8000'
-        country: CH
-      pricesIncludeVAT: true
-      subtotal: '12.35'
-      totalExclVAT: '11.42'
-      totalVAT: '0.93'
-      total: '12.35'
-      placedAt: '2026-11-22T12:00:00Z'
-      expiresAt: '2026-11-22T12:30:00Z'
-      status: PendingPayment
-      lines:
-      - product: SKU-1
-        sku: SKU-1
-        name: Mug
-        taxClass: Standard
-        vatRate: '8.10'
-        unitPrice: '12.35'
+      as: { user: alice.dev }
+    expect:
+      Order:
+        - cartId: ORDER-1
+          status: PendingPayment
+          total: '24.70'
+          subtotal: '24.70'
+          totalExclVAT: '22.85'
+          totalVAT: '1.85'
+      Catalogue.Stock:
+        - { stockKey: STOCK-1, reserved: 3 }
+  - name: Paid orders cannot be edited
+    now: 2026-11-22T12:01:00Z
+    given:
+      Customers.Customer:
+        - owner: dev:alice.dev
+          name: Alice
+          email: alice@example.test
+          shipping: { line1: Main 1, city: Zurich, postalCode: '8000', country: CH }
+      Catalogue.Category:
+        - { name: Equipment, taxClass: Standard }
+      Catalogue.Product:
+        - { sku: SKU-1, name: Mug, category: Equipment, price: '12.35', status: Active }
+      Catalogue.Stock:
+        - { product: SKU-1, stockKey: STOCK-1, onHand: 10, reserved: 1 }
+      Tax.Country:
+        - { code: CH, name: Switzerland, pricesIncludeVAT: true }
+      Tax.VatRate:
+        - { rateKey: CH:Standard, country: CH, taxClass: Standard, rate: '8.10' }
+      Order:
+        - owner: dev:alice.dev
+          cartId: ORDER-1
+          customer: dev:alice.dev
+          shipping: { line1: Main 1, city: Zurich, postalCode: '8000', country: CH }
+          pricesIncludeVAT: true
+          subtotal: '12.35'
+          totalExclVAT: '11.42'
+          totalVAT: '0.93'
+          total: '12.35'
+          placedAt: 2026-11-22T12:00:00Z
+          expiresAt: 2026-11-22T12:30:00Z
+          status: Paid
+          lines:
+            - product: SKU-1
+              sku: SKU-1
+              name: Mug
+              taxClass: Standard
+              vatRate: '8.10'
+              unitPrice: '12.35'
+              quantity: 1
+              totalExclVAT: '11.42'
+              totalVAT: '0.93'
+              total: '12.35'
+          vatBreakdown:
+            - { taxClass: Standard, rate: '8.10', totalExclVAT: '11.42', totalVAT: '0.93', total: '12.35' }
+    when:
+      command: AddOrderItem
+      on: ORDER-1
+      input:
+        product: SKU-1
         quantity: 1
-        totalExclVAT: '11.42'
-        totalVAT: '0.93'
-        total: '12.35'
-      vatBreakdown:
-      - taxClass: Standard
-        rate: '8.10'
-        totalExclVAT: '11.42'
-        totalVAT: '0.93'
-        total: '12.35'
-  when:
-    command: ShipOrder
-    'on': ORDER-1
-    input:
-      carrier: Manual
-      tracking: CH-1
-    as:
-      user: alice.dev
-  expect:
-    forbidden: true
-- name: Unpaid orders cannot be delivered
-  given:
-    Customers.Customer:
-    - owner: dev:alice.dev
-      name: Alice
-      email: alice@example.test
-      shipping:
-        line1: Main 1
-        city: Zurich
-        postalCode: '8000'
-        country: CH
-    Catalogue.Category:
-    - name: Equipment
-      taxClass: Standard
-    Catalogue.Product:
-    - sku: SKU-1
-      name: Mug
-      category: Equipment
-      price: '12.35'
-      status: Active
-    Catalogue.Stock:
-    - product: SKU-1
-      stockKey: STOCK-1
-      onHand: 10
-      reserved: 1
-    Tax.Country:
-    - code: CH
-      name: Switzerland
-      pricesIncludeVAT: true
-    Tax.VatRate:
-    - rateKey: CH:Standard
-      country: CH
-      taxClass: Standard
-      rate: '8.10'
-    Order:
-    - owner: dev:alice.dev
-      cartId: ORDER-1
-      customer: dev:alice.dev
-      shipping:
-        line1: Main 1
-        city: Zurich
-        postalCode: '8000'
-        country: CH
-      pricesIncludeVAT: true
-      subtotal: '12.35'
-      totalExclVAT: '11.42'
-      totalVAT: '0.93'
-      total: '12.35'
-      placedAt: '2026-11-22T12:00:00Z'
-      expiresAt: '2026-11-22T12:30:00Z'
-      status: PendingPayment
-      lines:
-      - product: SKU-1
-        sku: SKU-1
-        name: Mug
-        taxClass: Standard
-        vatRate: '8.10'
-        unitPrice: '12.35'
-        quantity: 1
-        totalExclVAT: '11.42'
-        totalVAT: '0.93'
-        total: '12.35'
-      vatBreakdown:
-      - taxClass: Standard
-        rate: '8.10'
-        totalExclVAT: '11.42'
-        totalVAT: '0.93'
-        total: '12.35'
-  when:
-    command: DeliverOrder
-    'on': ORDER-1
-    as:
-      user: warehouse.dev
-  expect:
-    rejected: true
-    errors:
-    - rule: notAvailable
-- name: A declined payment leaves the order pending
-  now: '2026-11-22T12:01:00Z'
-  given:
-    Customers.Customer:
-    - owner: dev:alice.dev
-      name: Alice
-      email: alice@example.test
-      shipping:
-        line1: Main 1
-        city: Zurich
-        postalCode: '8000'
-        country: CH
-    Catalogue.Category:
-    - name: Equipment
-      taxClass: Standard
-    Catalogue.Product:
-    - sku: SKU-1
-      name: Mug
-      category: Equipment
-      price: '12.35'
-      status: Active
-    Catalogue.Stock:
-    - product: SKU-1
-      stockKey: STOCK-1
-      onHand: 10
-      reserved: 1
-    Tax.Country:
-    - code: CH
-      name: Switzerland
-      pricesIncludeVAT: true
-    Tax.VatRate:
-    - rateKey: CH:Standard
-      country: CH
-      taxClass: Standard
-      rate: '8.10'
-    Order:
-    - owner: dev:alice.dev
-      cartId: ORDER-1
-      customer: dev:alice.dev
-      shipping:
-        line1: Main 1
-        city: Zurich
-        postalCode: '8000'
-        country: CH
-      pricesIncludeVAT: true
-      subtotal: '12.35'
-      totalExclVAT: '11.42'
-      totalVAT: '0.93'
-      total: '12.35'
-      placedAt: '2026-11-22T12:00:00Z'
-      expiresAt: '2026-11-22T12:30:00Z'
-      status: PendingPayment
-      lines:
-      - product: SKU-1
-        sku: SKU-1
-        name: Mug
-        taxClass: Standard
-        vatRate: '8.10'
-        unitPrice: '12.35'
-        quantity: 1
-        totalExclVAT: '11.42'
-        totalVAT: '0.93'
-        total: '12.35'
-      vatBreakdown:
-      - taxClass: Standard
-        rate: '8.10'
-        totalExclVAT: '11.42'
-        totalVAT: '0.93'
-        total: '12.35'
-  when:
-    command: PayOrder
-    'on': ORDER-1
-    input:
-      attemptKey: decline
-      method: Decline
-    as:
-      user: alice.dev
-  expect:
-    Order:
-    - cartId: ORDER-1
-      status: PendingPayment
-- name: A retried payment with the same key runs once
-  now: '2026-11-22T12:01:00Z'
-  given:
-    Customers.Customer:
-    - owner: dev:alice.dev
-      name: Alice
-      email: alice@example.test
-      shipping:
-        line1: Main 1
-        city: Zurich
-        postalCode: '8000'
-        country: CH
-    Catalogue.Category:
-    - name: Equipment
-      taxClass: Standard
-    Catalogue.Product:
-    - sku: SKU-1
-      name: Mug
-      category: Equipment
-      price: '12.35'
-      status: Active
-    Catalogue.Stock:
-    - product: SKU-1
-      stockKey: STOCK-1
-      onHand: 10
-      reserved: 1
-    Tax.Country:
-    - code: CH
-      name: Switzerland
-      pricesIncludeVAT: true
-    Tax.VatRate:
-    - rateKey: CH:Standard
-      country: CH
-      taxClass: Standard
-      rate: '8.10'
-    Order:
-    - owner: dev:alice.dev
-      cartId: ORDER-1
-      customer: dev:alice.dev
-      shipping:
-        line1: Main 1
-        city: Zurich
-        postalCode: '8000'
-        country: CH
-      pricesIncludeVAT: true
-      subtotal: '12.35'
-      totalExclVAT: '11.42'
-      totalVAT: '0.93'
-      total: '12.35'
-      placedAt: '2026-11-22T12:00:00Z'
-      expiresAt: '2026-11-22T12:30:00Z'
-      status: PendingPayment
-      lines:
-      - product: SKU-1
-        sku: SKU-1
-        name: Mug
-        taxClass: Standard
-        vatRate: '8.10'
-        unitPrice: '12.35'
-        quantity: 1
-        totalExclVAT: '11.42'
-        totalVAT: '0.93'
-        total: '12.35'
-      vatBreakdown:
-      - taxClass: Standard
-        rate: '8.10'
-        totalExclVAT: '11.42'
-        totalVAT: '0.93'
-        total: '12.35'
-  when:
-  - command: PayOrder
-    'on': ORDER-1
-    input:
-      attemptKey: decline
-      method: Decline
-    as:
-      user: alice.dev
-  - command: PayOrder
-    'on': ORDER-1
-    input:
-      attemptKey: decline
-      method: Decline
-    as:
-      user: alice.dev
-  expect:
-    count:
-      PaymentAttempt: 1
-    Order:
-    - cartId: ORDER-1
-      status: PendingPayment
-- name: Customers can add to a pending order and keep its price snapshot
-  now: '2026-11-22T12:01:00Z'
-  given:
-    Customers.Customer:
-    - owner: dev:alice.dev
-      name: Alice
-      email: alice@example.test
-      shipping:
-        line1: Main 1
-        city: Zurich
-        postalCode: '8000'
-        country: CH
-    Catalogue.Category:
-    - name: Equipment
-      taxClass: Standard
-    Catalogue.Product:
-    - sku: SKU-1
-      name: Mug
-      category: Equipment
-      price: '12.35'
-      status: Active
-    Catalogue.Stock:
-    - product: SKU-1
-      stockKey: STOCK-1
-      onHand: 10
-      reserved: 1
-    Tax.Country:
-    - code: CH
-      name: Switzerland
-      pricesIncludeVAT: true
-    Tax.VatRate:
-    - rateKey: CH:Standard
-      country: CH
-      taxClass: Standard
-      rate: '8.10'
-    Order:
-    - owner: dev:alice.dev
-      cartId: ORDER-1
-      customer: dev:alice.dev
-      shipping:
-        line1: Main 1
-        city: Zurich
-        postalCode: '8000'
-        country: CH
-      pricesIncludeVAT: true
-      subtotal: '12.35'
-      totalExclVAT: '11.42'
-      totalVAT: '0.93'
-      total: '12.35'
-      placedAt: '2026-11-22T12:00:00Z'
-      expiresAt: '2026-11-22T12:30:00Z'
-      status: PendingPayment
-      lines:
-      - product: SKU-1
-        sku: SKU-1
-        name: Mug
-        taxClass: Standard
-        vatRate: '8.10'
-        unitPrice: '12.35'
-        quantity: 1
-        totalExclVAT: '11.42'
-        totalVAT: '0.93'
-        total: '12.35'
-      vatBreakdown:
-      - taxClass: Standard
-        rate: '8.10'
-        totalExclVAT: '11.42'
-        totalVAT: '0.93'
-        total: '12.35'
-  when:
-    command: AddOrderItem
-    'on': ORDER-1
-    input:
-      product: SKU-1
-      quantity: 1
-    as:
-      user: alice.dev
-  expect:
-    Order:
-    - cartId: ORDER-1
-      status: PendingPayment
-      total: '24.70'
-      subtotal: '24.70'
-      totalExclVAT: '22.85'
-      totalVAT: '1.85'
-    Catalogue.Stock:
-    - stockKey: STOCK-1
-      reserved: 3
-- name: Paid orders cannot be edited
-  now: '2026-11-22T12:01:00Z'
-  given:
-    Customers.Customer:
-    - owner: dev:alice.dev
-      name: Alice
-      email: alice@example.test
-      shipping:
-        line1: Main 1
-        city: Zurich
-        postalCode: '8000'
-        country: CH
-    Catalogue.Category:
-    - name: Equipment
-      taxClass: Standard
-    Catalogue.Product:
-    - sku: SKU-1
-      name: Mug
-      category: Equipment
-      price: '12.35'
-      status: Active
-    Catalogue.Stock:
-    - product: SKU-1
-      stockKey: STOCK-1
-      onHand: 10
-      reserved: 1
-    Tax.Country:
-    - code: CH
-      name: Switzerland
-      pricesIncludeVAT: true
-    Tax.VatRate:
-    - rateKey: CH:Standard
-      country: CH
-      taxClass: Standard
-      rate: '8.10'
-    Order:
-    - owner: dev:alice.dev
-      cartId: ORDER-1
-      customer: dev:alice.dev
-      shipping:
-        line1: Main 1
-        city: Zurich
-        postalCode: '8000'
-        country: CH
-      pricesIncludeVAT: true
-      subtotal: '12.35'
-      totalExclVAT: '11.42'
-      totalVAT: '0.93'
-      total: '12.35'
-      placedAt: '2026-11-22T12:00:00Z'
-      expiresAt: '2026-11-22T12:30:00Z'
-      status: Paid
-      lines:
-      - product: SKU-1
-        sku: SKU-1
-        name: Mug
-        taxClass: Standard
-        vatRate: '8.10'
-        unitPrice: '12.35'
-        quantity: 1
-        totalExclVAT: '11.42'
-        totalVAT: '0.93'
-        total: '12.35'
-      vatBreakdown:
-      - taxClass: Standard
-        rate: '8.10'
-        totalExclVAT: '11.42'
-        totalVAT: '0.93'
-        total: '12.35'
-  when:
-    command: AddOrderItem
-    'on': ORDER-1
-    input:
-      product: SKU-1
-      quantity: 1
-    as:
-      user: alice.dev
-  expect:
-    rejected: true
-    errors:
-    - rule: notAvailable
-    Order:
-    - cartId: ORDER-1
-      total: '12.35'
-- name: Pending orders cannot be replaced
-  now: '2026-11-22T12:01:00Z'
-  given:
-    Customers.Customer:
-    - owner: dev:alice.dev
-      name: Alice
-      email: alice@example.test
-      shipping:
-        line1: Main 1
-        city: Zurich
-        postalCode: '8000'
-        country: CH
-    Catalogue.Category:
-    - name: Equipment
-      taxClass: Standard
-    Catalogue.Product:
-    - sku: SKU-1
-      name: Mug
-      category: Equipment
-      price: '12.35'
-      status: Active
-    Catalogue.Stock:
-    - product: SKU-1
-      stockKey: STOCK-1
-      onHand: 10
-      reserved: 1
-    Tax.Country:
-    - code: CH
-      name: Switzerland
-      pricesIncludeVAT: true
-    Tax.VatRate:
-    - rateKey: CH:Standard
-      country: CH
-      taxClass: Standard
-      rate: '8.10'
-    Order:
-    - owner: dev:alice.dev
-      cartId: ORDER-1
-      customer: dev:alice.dev
-      shipping:
-        line1: Main 1
-        city: Zurich
-        postalCode: '8000'
-        country: CH
-      pricesIncludeVAT: true
-      subtotal: '12.35'
-      totalExclVAT: '11.42'
-      totalVAT: '0.93'
-      total: '12.35'
-      placedAt: '2026-11-22T12:00:00Z'
-      expiresAt: '2026-11-22T12:30:00Z'
-      status: PendingPayment
-      lines:
-      - product: SKU-1
-        sku: SKU-1
-        name: Mug
-        taxClass: Standard
-        vatRate: '8.10'
-        unitPrice: '12.35'
-        quantity: 1
-        totalExclVAT: '11.42'
-        totalVAT: '0.93'
-        total: '12.35'
-      vatBreakdown:
-      - taxClass: Standard
-        rate: '8.10'
-        totalExclVAT: '11.42'
-        totalVAT: '0.93'
-        total: '12.35'
-  when:
-    command: ReplaceOrder
-    'on': ORDER-1
-    input:
-      requestKey: replace-1
-    as:
-      user: alice.dev
-  expect:
-    rejected: true
-    errors:
-    - rule: notAvailable
-- name: Warehouse staff cannot cancel a paid order
-  given:
-    Customers.Customer:
-    - owner: dev:alice.dev
-      name: Alice
-      email: alice@example.test
-      shipping:
-        line1: Main 1
-        city: Zurich
-        postalCode: '8000'
-        country: CH
-    Catalogue.Category:
-    - name: Equipment
-      taxClass: Standard
-    Catalogue.Product:
-    - sku: SKU-1
-      name: Mug
-      category: Equipment
-      price: '12.35'
-      status: Active
-    Catalogue.Stock:
-    - product: SKU-1
-      stockKey: STOCK-1
-      onHand: 10
-      reserved: 1
-    Tax.Country:
-    - code: CH
-      name: Switzerland
-      pricesIncludeVAT: true
-    Tax.VatRate:
-    - rateKey: CH:Standard
-      country: CH
-      taxClass: Standard
-      rate: '8.10'
-    Order:
-    - owner: dev:alice.dev
-      cartId: ORDER-1
-      customer: dev:alice.dev
-      shipping:
-        line1: Main 1
-        city: Zurich
-        postalCode: '8000'
-        country: CH
-      pricesIncludeVAT: true
-      subtotal: '12.35'
-      totalExclVAT: '11.42'
-      totalVAT: '0.93'
-      total: '12.35'
-      placedAt: '2026-11-22T12:00:00Z'
-      expiresAt: '2026-11-22T12:30:00Z'
-      status: Paid
-      lines:
-      - product: SKU-1
-        sku: SKU-1
-        name: Mug
-        taxClass: Standard
-        vatRate: '8.10'
-        unitPrice: '12.35'
-        quantity: 1
-        totalExclVAT: '11.42'
-        totalVAT: '0.93'
-        total: '12.35'
-      vatBreakdown:
-      - taxClass: Standard
-        rate: '8.10'
-        totalExclVAT: '11.42'
-        totalVAT: '0.93'
-        total: '12.35'
-  when:
-    command: CancelPaidOrder
-    'on': ORDER-1
-    as:
-      user: warehouse.dev
-  expect:
-    forbidden: true
-    Order:
-    - cartId: ORDER-1
-      status: Paid
+      as: { user: alice.dev }
+    expect:
+      rejected: true
+      errors:
+        - { rule: notAvailable }
+      Order:
+        - { cartId: ORDER-1, total: '12.35' }
+  - name: Pending orders cannot be replaced
+    now: 2026-11-22T12:01:00Z
+    given:
+      Customers.Customer:
+        - owner: dev:alice.dev
+          name: Alice
+          email: alice@example.test
+          shipping: { line1: Main 1, city: Zurich, postalCode: '8000', country: CH }
+      Catalogue.Category:
+        - { name: Equipment, taxClass: Standard }
+      Catalogue.Product:
+        - { sku: SKU-1, name: Mug, category: Equipment, price: '12.35', status: Active }
+      Catalogue.Stock:
+        - { product: SKU-1, stockKey: STOCK-1, onHand: 10, reserved: 1 }
+      Tax.Country:
+        - { code: CH, name: Switzerland, pricesIncludeVAT: true }
+      Tax.VatRate:
+        - { rateKey: CH:Standard, country: CH, taxClass: Standard, rate: '8.10' }
+      Order:
+        - owner: dev:alice.dev
+          cartId: ORDER-1
+          customer: dev:alice.dev
+          shipping: { line1: Main 1, city: Zurich, postalCode: '8000', country: CH }
+          pricesIncludeVAT: true
+          subtotal: '12.35'
+          totalExclVAT: '11.42'
+          totalVAT: '0.93'
+          total: '12.35'
+          placedAt: 2026-11-22T12:00:00Z
+          expiresAt: 2026-11-22T12:30:00Z
+          status: PendingPayment
+          lines:
+            - product: SKU-1
+              sku: SKU-1
+              name: Mug
+              taxClass: Standard
+              vatRate: '8.10'
+              unitPrice: '12.35'
+              quantity: 1
+              totalExclVAT: '11.42'
+              totalVAT: '0.93'
+              total: '12.35'
+          vatBreakdown:
+            - { taxClass: Standard, rate: '8.10', totalExclVAT: '11.42', totalVAT: '0.93', total: '12.35' }
+    when:
+      command: ReplaceOrder
+      on: ORDER-1
+      input:
+        requestKey: replace-1
+      as: { user: alice.dev }
+    expect:
+      rejected: true
+      errors:
+        - { rule: notAvailable }
+  - name: Warehouse staff cannot cancel a paid order
+    given:
+      Customers.Customer:
+        - owner: dev:alice.dev
+          name: Alice
+          email: alice@example.test
+          shipping: { line1: Main 1, city: Zurich, postalCode: '8000', country: CH }
+      Catalogue.Category:
+        - { name: Equipment, taxClass: Standard }
+      Catalogue.Product:
+        - { sku: SKU-1, name: Mug, category: Equipment, price: '12.35', status: Active }
+      Catalogue.Stock:
+        - { product: SKU-1, stockKey: STOCK-1, onHand: 10, reserved: 1 }
+      Tax.Country:
+        - { code: CH, name: Switzerland, pricesIncludeVAT: true }
+      Tax.VatRate:
+        - { rateKey: CH:Standard, country: CH, taxClass: Standard, rate: '8.10' }
+      Order:
+        - owner: dev:alice.dev
+          cartId: ORDER-1
+          customer: dev:alice.dev
+          shipping: { line1: Main 1, city: Zurich, postalCode: '8000', country: CH }
+          pricesIncludeVAT: true
+          subtotal: '12.35'
+          totalExclVAT: '11.42'
+          totalVAT: '0.93'
+          total: '12.35'
+          placedAt: 2026-11-22T12:00:00Z
+          expiresAt: 2026-11-22T12:30:00Z
+          status: Paid
+          lines:
+            - product: SKU-1
+              sku: SKU-1
+              name: Mug
+              taxClass: Standard
+              vatRate: '8.10'
+              unitPrice: '12.35'
+              quantity: 1
+              totalExclVAT: '11.42'
+              totalVAT: '0.93'
+              total: '12.35'
+          vatBreakdown:
+            - { taxClass: Standard, rate: '8.10', totalExclVAT: '11.42', totalVAT: '0.93', total: '12.35' }
+    when:
+      command: CancelPaidOrder
+      on: ORDER-1
+      as: { user: warehouse.dev }
+    expect:
+      forbidden: true
+      Order:
+        - { cartId: ORDER-1, status: Paid }

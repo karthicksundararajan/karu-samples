@@ -1,7 +1,3 @@
-types:
-  Money: { type: decimal, precision: 12, scale: 2, min: 0 }
-  Count: { type: int, min: 0 }
-  Units: { type: int, min: 1 }
 entities:
   Category:
     fields:
@@ -21,12 +17,15 @@ entities:
       stockKey: { type: string, max: 40, required: true, unique: true }
       onHand: Count
       reserved: Count
-    rules:
-    - ValidStock
+    rules: [ValidStock]
   StockMovement:
     fields:
       stock: Stock
-      kind: { type: enum, required: true, values: [Adjustment, Reservation, Release, Sale, Return], default: Adjustment }
+      kind:
+        type: enum
+        required: true
+        values: [Adjustment, Reservation, Release, Sale, Return]
+        default: Adjustment
       quantity: { type: int, required: true, min: -1000000 }
       at: datetime
 contracts:
@@ -42,76 +41,58 @@ contracts:
   AdjustBalance:
     kind: commandHandler
     input: Stock
-    data:
-      creates:
-      - StockMovement
+    data: { creates: [StockMovement] }
   ReserveBalance:
     kind: commandHandler
     input: Stock
-    data:
-      creates:
-      - StockMovement
+    data: { creates: [StockMovement] }
   ReleaseBalance:
     kind: commandHandler
     input: Stock
-    data:
-      creates:
-      - StockMovement
+    data: { creates: [StockMovement] }
   ConsumeBalance:
     kind: commandHandler
     input: Stock
-    data:
-      creates:
-      - StockMovement
+    data: { creates: [StockMovement] }
   ReturnBalance:
     kind: commandHandler
     input: Stock
-    data:
-      creates:
-      - StockMovement
+    data: { creates: [StockMovement] }
 stateMachines:
-  Product.status:
-    Draft:
-    - Active
-    Active:
-    - Discontinued
+  Product.status: { Draft: [Active], Active: [Discontinued] }
 commands:
   CreateProduct:
-    'on': Product
+    on: Product
     kind: create
     emits: ProductCreated
   PublishProduct:
-    'on': Product
-    transition:
-      from: Draft
-      to: Active
+    on: Product
+    transition: { from: Draft, to: Active }
   DiscontinueProduct:
-    'on': Product
-    transition:
-      from: Active
-      to: Discontinued
+    on: Product
+    transition: { from: Active, to: Discontinued }
   AdjustStock:
-    'on': Stock
+    on: Stock
     input:
       quantity: { type: int, required: true, min: -1000000 }
     handler: AdjustBalance
   ReserveStock:
-    'on': Stock
+    on: Stock
     input:
       quantity: Units
     handler: ReserveBalance
   ReleaseStock:
-    'on': Stock
+    on: Stock
     input:
       quantity: Units
     handler: ReleaseBalance
   ConsumeStock:
-    'on': Stock
+    on: Stock
     input:
       quantity: Units
     handler: ConsumeBalance
   ReturnStock:
-    'on': Stock
+    on: Stock
     input:
       quantity: Units
     handler: ReturnBalance
@@ -120,102 +101,50 @@ events:
     fields:
       sku: string
 subscribers:
-- 'on': ProductCreated
-  handler: InitializeStock
+  - { on: ProductCreated, handler: InitializeStock }
 queries:
   ProductById:
     from: Product
-    select:
-    - id
+    select: [id]
     params:
-      productId:
-        type: int
-        required: true
+      productId: { type: int, required: true }
     where:
-      id:
-        param: productId
+      id: { param: productId }
   CategoryById:
     from: Category
-    select:
-    - id
+    select: [id]
     params:
-      categoryId:
-        type: int
-        required: true
+      categoryId: { type: int, required: true }
     where:
-      id:
-        param: categoryId
+      id: { param: categoryId }
   StockByProduct:
     from: Stock
-    select:
-    - id
+    select: [id]
     params:
-      productId:
-        ref: Product
-        required: true
+      productId: { ref: Product, required: true }
     where:
-      product:
-        param: productId
+      product: { param: productId }
   PublishedProducts:
     from: Product
-    select:
-    - id
-    - sku
-    - name
-    - price
+    select: [id, sku, name, price]
     where:
       status: Active
-    orderBy:
-    - name
+    orderBy: [name]
 permissions:
-  AdjustStock:
-  - Warehouse
-  - Admin
-  ReserveStock:
-  - System
-  ReleaseStock:
-  - System
-  ConsumeStock:
-  - System
-  ReturnStock:
-  - System
+  AdjustStock: [Warehouse, Admin]
+  ReserveStock: [System]
+  ReleaseStock: [System]
+  ConsumeStock: [System]
+  ReturnStock: [System]
   Category:
-    read:
-    - Customer
-    - CatalogueManager
-    - Warehouse
-    - Support
-    - Admin
-    create:
-    - CatalogueManager
-    - Admin
-    update:
-    - CatalogueManager
-    - Admin
+    read: [Customer, CatalogueManager, Warehouse, Support, Admin]
+    create: [CatalogueManager, Admin]
+    update: [CatalogueManager, Admin]
   Product:
-    read:
-    - Customer
-    - CatalogueManager
-    - Warehouse
-    - Support
-    - Admin
-    create:
-    - CatalogueManager
-    - Admin
-    update:
-    - CatalogueManager
-    - Admin
-  Stock:
-    read:
-    - Warehouse
-    - Admin
-  StockMovement:
-    read:
-    - Warehouse
-    - Admin
-  PublishProduct:
-  - CatalogueManager
-  - Admin
-  DiscontinueProduct:
-  - CatalogueManager
-  - Admin
+    read: [Customer, CatalogueManager, Warehouse, Support, Admin]
+    create: [CatalogueManager, Admin]
+    update: [CatalogueManager, Admin]
+  Stock: { read: [Warehouse, Admin] }
+  StockMovement: { read: [Warehouse, Admin] }
+  PublishProduct: [CatalogueManager, Admin]
+  DiscontinueProduct: [CatalogueManager, Admin]
