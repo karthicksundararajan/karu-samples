@@ -130,7 +130,7 @@ def run(base, folder, postgres):
     assert (us_order['pricesIncludeVAT'], us_order['subtotal'], us_order['totalExclVAT'], us_order['totalVAT'], us_order['total']) == (False, '24.70', '24.70', '1.98', '26.68'), us_order
     bob.command('sales','CancelOrder',us_order['id'])
     assert alice.command('sales','Checkout',c['id'],{'requestKey':'checkout-1'})['order']['id'] == oid
-    alice.command('sales','Checkout',c['id'],{'requestKey':'different'},422)
+    alice.command('sales','Checkout',c['id'],{'requestKey':'different'},409)
     alice.command('sales','AddItem',c['id'],{'product':p['id'],'quantity':1},409)
     bob.get('sales','Order',oid,404)
     bob.command('sales','PayOrder',oid,{'attemptKey':'steal','method':'Success'},404)
@@ -179,12 +179,13 @@ def run(base, folder, postgres):
     alice.call('PUT',f"/api/data/customers/Customer/{ac['id']}",{'name':'Alice','email':'alice@example.test','shipping':{**address,'line1':'New street 2'}})
     assert alice.get('sales','Order',oid)['shipping'] == address
     assert alice.command('sales','PayOrder',oid,{'attemptKey':'declined','method':'Decline'})['status'] == 'PendingPayment'
-    alice.command('sales','PayOrder',oid,{'attemptKey':'declined','method':'Success'})
+    # Same key, other input: the platform refuses the reused key and runs nothing.
+    alice.command('sales','PayOrder',oid,{'attemptKey':'declined','method':'Success'},409)
     assert len(alice.rows('sales','PaymentAttempt')) == 1
     assert alice.command('sales','PayOrder',oid,{'attemptKey':'timeout','method':'Timeout'})['status'] == 'PendingPayment'
     assert alice.command('sales','PayOrder',oid,{'attemptKey':'success','method':'Success'})['status'] == 'Paid'
     alice.command('sales','PayOrder',oid,{'attemptKey':'success','method':'Success'})
-    alice.command('sales','PayOrder',oid,{'attemptKey':'new','method':'Success'},422)
+    alice.command('sales','PayOrder',oid,{'attemptKey':'new','method':'Success'},409)
     current = warehouse.get('catalogue','Stock',stock['id'])
     assert (current['onHand'],current['reserved']) == (8,0), current
     alice.command('sales','CancelOrder',oid,expected=409)
@@ -205,7 +206,7 @@ def run(base, folder, postgres):
     before = on_hand()
     link = alice.command('sales','ReplaceOrder',original,{'requestKey':'r1'})['replacement']['id']
     assert alice.command('sales','ReplaceOrder',original,{'requestKey':'r1'})['replacement']['id'] == link
-    alice.command('sales','ReplaceOrder',original,{'requestKey':'r2'},422)
+    alice.command('sales','ReplaceOrder',original,{'requestKey':'r2'},409)
     bob.command('sales','ReplaceOrder',original,{'requestKey':'r3'},404)
     warehouse.command('sales','ShipOrder',original,{'carrier':'Manual','tracking':'CH-2'},409)
     alice.command('sales','CancelPaidOrder',original,expected=409)
@@ -284,7 +285,7 @@ def run(base, folder, postgres):
         with sqlite3.connect(folder/'data/ecommerce.db') as db:
             db.execute('UPDATE sales_order SET expires_at = ? WHERE id = ?', (deadline.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3], racing_id))
         time.sleep(.23)
-        alice.command('sales','PayOrder',racing_id,{'attemptKey':'race','method':'Success'},[200,422])
+        alice.command('sales','PayOrder',racing_id,{'attemptKey':'race','method':'Success'},[200,409,422])
         for _ in range(100):
             terminal = alice.get('sales','Order',racing_id)['status']
             if terminal in ('Paid','Expired'): break

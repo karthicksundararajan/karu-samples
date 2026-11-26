@@ -117,7 +117,6 @@
         { "name": "deletedAt", "fieldType": "dateTime", "required": false, "unique": false, "precision": 0, "scale": 0, "references": null },
         { "name": "owner", "fieldType": "string", "required": true, "unique": false, "precision": 0, "scale": 0, "references": null },
         { "name": "cartId", "fieldType": "string", "required": false, "unique": true, "precision": 0, "scale": 0, "references": null },
-        { "name": "checkoutKey", "fieldType": "string", "required": true, "unique": true, "precision": 0, "scale": 0, "references": null },
         { "name": "customer", "fieldType": "ref", "required": true, "unique": false, "precision": 0, "scale": 0, "references": "customers_customer" },
         { "name": "shipping.line1", "fieldType": "string", "required": true, "unique": false, "precision": 0, "scale": 0, "references": null },
         { "name": "shipping.city", "fieldType": "string", "required": true, "unique": false, "precision": 0, "scale": 0, "references": null },

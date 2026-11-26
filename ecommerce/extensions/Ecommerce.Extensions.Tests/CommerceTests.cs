@@ -301,19 +301,10 @@ public sealed class CommerceTests
         var result = Host.Handle("Sales.ReplaceOrder", PaidOrder(), Host.Input("Sales.ReplaceOrder", V(("requestKey", "r1"))), new HandlerServices(data, "dev:alice.dev", Now));
         Assert.True(result.Valid, string.Join("; ", result.Errors.Select(e => e.Message)));
         var replacement = data.Creates.Single(c => c.Entity == "Sales.Order").Values;
-        Has(replacement, ("replaces", 1L), ("checkoutKey", "replace:1:r1"), ("total", 24.70m));
+        Has(replacement, ("replaces", 1L), ("total", 24.70m));
+        Assert.False(replacement.ContainsKey("checkoutKey"));
         Assert.Equal(2L, result.Changes.Single(c => c.Key == "replacement").Value);
         Assert.Single(data.Creates, c => c.Entity == "Sales.Reservation");
-    }
-
-    [Fact]
-    public void Replacing_an_order_is_idempotent_by_request_key()
-    {
-        var data = Host.Data("Sales.StartReplacement").OnQuery("OrderById", [Host.Record("Sales.Order", V(("id", 2L), ("checkoutKey", "replace:1:r1")))]);
-        var services = new HandlerServices(data, "dev:alice.dev", Now);
-        Assert.True(Host.Handle("Sales.ReplaceOrder", PaidOrder(replacement: 2), Host.Input("Sales.ReplaceOrder", V(("requestKey", "r1"))), services).Valid);
-        Assert.False(Host.Handle("Sales.ReplaceOrder", PaidOrder(replacement: 2), Host.Input("Sales.ReplaceOrder", V(("requestKey", "other"))), services).Valid);
-        Assert.Empty(data.Creates);
     }
 
     [Fact]
@@ -387,20 +378,6 @@ public sealed class CommerceTests
         Assert.Equal(outcome, first.Get<string>("outcome"));
         Assert.Equal(first.Get<string?>("reference"), second.Get<string?>("reference"));
         Assert.Equal("Succeeded", port.Call("Refund", V(("key", "refund:1"), ("amount", 12.34m))).Get<string>("outcome"));
-    }
-
-    [Fact]
-    public void A_replayed_payment_does_not_call_the_port_or_confirm_again()
-    {
-        var data = Host.Data("Sales.TakePayment").OnQuery("PaymentByKey", [Host.Record("Sales.PaymentAttempt", V(("id", 5L)))]);
-        var port = Host.Fake("Sales.Payments");
-        var record = Host.Record("Sales.Order", V(("id", 1L), ("owner", "dev:alice.dev"), ("status", "Paid")));
-        var result = Host.Handle("Sales.PayOrder", record, Host.Input("Sales.PayOrder", V(("attemptKey", "one"), ("method", "Success"))),
-            new HandlerServices(data, "dev:alice.dev", Now), new Dictionary<string, IPortClient> { ["Sales.Payments"] = port });
-        Assert.True(result.Valid);
-        Assert.Empty(port.Calls);
-        Assert.Empty(data.Creates);
-        Assert.Empty(data.Calls);
     }
 
     [Fact]

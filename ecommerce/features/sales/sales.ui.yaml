@@ -14,7 +14,7 @@ pages:
         - title: Replacement
           fields: [replaces, replacement]
         - title: Order references
-          fields: [cartId, checkoutKey, owner]
+          fields: [cartId, owner]
     related:
       - title: Payments
         query: OrderPayments

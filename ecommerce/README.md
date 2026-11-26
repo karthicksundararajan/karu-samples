@@ -119,7 +119,7 @@ curl -b /tmp/ecommerce.cookies -H 'Content-Type: application/json' \
 curl -b /tmp/ecommerce.cookies http://localhost:5180/api/query/sales/MyOrders
 ```
 
-Checkout snapshots the current catalogue price and customer address, reserves every line atomically and starts a 30-minute payment window. Repeat checkout with the same cart and request key to recover its order reference. A different key on an already checked-out cart is rejected. The cart is immutable after checkout; create another cart for a new purchase.
+Checkout snapshots the current catalogue price and customer address, reserves every line atomically and starts a 30-minute payment window. `Checkout`, `PayOrder` and `ReplaceOrder` are idempotent (`idempotent:` in `sales.app.yaml`): repeating a request with the same key returns the record without running anything again, so a retried checkout recovers its order reference. The same key with other input is refused with 409, and a new key on an already checked-out cart is refused with 409 because the cart is no longer Open. The cart is immutable after checkout; create another cart for a new purchase.
 
 Payment methods are `Success`, `Decline` and `Timeout`. A payment attempt is identified by order and attempt key. Repeating a key returns the recorded result without calling the adapter again. Use a new key to retry a declined or timed-out attempt. A successful payment moves the order to `Paid`, reduces on-hand stock and consumes reservations. A decline or timeout leaves the reservation held until payment, cancellation or expiry. Inspect `/api/data/sales/PaymentAttempt` to see outcomes.
 

@@ -306,21 +306,13 @@ public sealed class PlaceOrder : CommandHandler
 {
     public override HandlerResult Handle(EntityRecord record, EntityRecord input, HandlerContext context)
     {
-        var key = $"{record.Id}:{input.Get<string>("requestKey")}";
-        if (record.Ref("order") is { } existing)
-        {
-            // A single immutable order per cart; verify the original request key before accepting a replay.
-            var order = Commerce.One(context, "OrderById", ("orderId", existing.Id));
-            return order.Get<string>("checkoutKey") == key ? HandlerResult.Ok : HandlerResult.Fail(null, "This cart was already checked out with a different key.");
-        }
-        if (record.Get<string>("status") != "Open") return HandlerResult.Fail(null, "This cart is closed.");
         var customer = Commerce.One(context, "Customers.CustomerById", ("customerId", record.Ref("customer")!.Id));
         var lines = record.Children("lines");
         if (lines.Count == 0) return HandlerResult.Fail(null, "The cart is empty.");
         var tax = TaxRules.For(context, Orders.Country(customer));
         var priced = Orders.Price(lines.Select(l => Orders.FromCatalogue(context, tax, l.Ref("product")!.Id, l.Get<int>("quantity"))), tax);
         var orderId = context.Data.Create("Order", Orders.Values(priced, ("owner", record.Get<string>("owner")), ("cartId", Commerce.Id(record.Id!.Value)),
-            ("checkoutKey", key), ("customer", customer.Id), ("shipping", customer.GetValueObject("shipping")!.ToDictionary()), ("currency", "CHF"),
+            ("customer", customer.Id), ("shipping", customer.GetValueObject("shipping")!.ToDictionary()), ("currency", "CHF"),
             ("placedAt", context.UtcNow), ("expiresAt", context.UtcNow.AddMinutes(30))));
         Orders.Reserve(context, orderId, priced.Lines.Select(l => l.Line));
         context.Data.Run("SealCart", record.Id!.Value);
@@ -381,20 +373,15 @@ public sealed class EditOrder : CommandHandler
 
 /// <summary>ReplaceOrder: a paid order gets a pending replacement with the same line snapshots and its own reservations.
 /// The customer edits the replacement (dropping lines cancels them) and pays it; paying it supersedes and refunds this
-/// order. Repeating the request key returns the existing replacement.</summary>
+/// order. ReplaceOrder is idempotent, so a repeated request key never reaches this handler.</summary>
 [KaruContract("Sales.StartReplacement")]
 public sealed class StartReplacement : CommandHandler
 {
     public override HandlerResult Handle(EntityRecord record, EntityRecord input, HandlerContext context)
     {
-        var key = $"replace:{record.Id}:{input.Get<string>("requestKey")}";
-        if (record.Ref("replacement") is { } existing)
-            return Commerce.One(context, "OrderById", ("orderId", existing.Id)).Get<string>("checkoutKey") == key
-                ? HandlerResult.Ok : HandlerResult.Fail(null, "This order already has an open replacement.");
-        if (record.Get<string>("status") != "Paid") return HandlerResult.Fail(null, "Only paid orders can be replaced.");
         var tax = TaxRules.For(context, Orders.Country(record));
         var priced = Orders.Price(record.Children("lines").Select(l => Orders.FromLine(l, tax, keepId: false)), tax);
-        var replacement = context.Data.Create("Order", Orders.Values(priced, ("owner", record.Get<string>("owner")), ("checkoutKey", key),
+        var replacement = context.Data.Create("Order", Orders.Values(priced, ("owner", record.Get<string>("owner")),
             ("customer", record.Ref("customer")), ("shipping", record.GetValueObject("shipping")!.ToDictionary()), ("currency", record.Get<string>("currency")),
             ("placedAt", context.UtcNow), ("expiresAt", context.UtcNow.AddMinutes(30)), ("replaces", record.Id)));
         Orders.Reserve(context, replacement, priced.Lines.Select(l => l.Line));
@@ -407,9 +394,8 @@ public sealed class TakePayment : CommandHandler
 {
     public override HandlerResult Handle(EntityRecord record, EntityRecord input, HandlerContext context)
     {
+        // The provider sees one key per order and attempt; a retried PayOrder never reaches this handler.
         var key = $"{record.Id}:{input.Get<string>("attemptKey")}";
-        if (Commerce.All(context, "PaymentByKey", ("key", key)).Count != 0) return HandlerResult.Ok;
-        if (record.Get<string>("status") != "PendingPayment") return HandlerResult.Fail(null, "Only pending orders can be paid.");
         if (context.UtcNow >= record.Get<DateTime>("expiresAt")) return HandlerResult.Fail(null, "This order has expired.");
         string outcome; string? reference = null;
         var amount = record.Get<decimal>("total");
