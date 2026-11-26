@@ -159,27 +159,17 @@ public sealed class CommerceTests
         Assert.Null(result.Children("lines"));
     }
 
-    /// <summary>A discontinued product may stay or shrink in a cart, but its quantity cannot grow.</summary>
+    /// <summary>A cart update may change the lines only. A product that is not active is refused by the platform
+    /// (refWhen on CartLine.product), which the scenarios and HTTP tests cover.</summary>
     [Fact]
-    public void An_unavailable_product_cannot_grow()
-    {
-        var stored = OpenCart(V(("id", 5L), ("product", new RecordRef(4, "Old")), ("quantity", 2)));
-        var data = Catalogue("Sales.ChangeCart").OnQuery("CartById", [stored]);
-        HandlerOutcome Change(int quantity) => Host.Handle("Sales.ChangeItem", OpenCart(V(("id", 5L), ("product", new RecordRef(4, "Old")), ("quantity", quantity))),
-            Host.Input("Sales.ChangeItem", V(("product", new RecordRef(4, "Old")), ("quantity", quantity))), new HandlerServices(data, "dev:alice.dev", Now));
-        Assert.True(Change(1).Valid);
-        Assert.Equal("The product is unavailable.", Assert.Single(Change(3).Errors).Message);
-    }
-
-    [Fact]
-    public void A_cart_update_cannot_change_the_customer_or_add_an_unavailable_product()
+    public void A_cart_update_cannot_change_the_customer()
     {
         var stored = OpenCart();
         var data = Catalogue("Sales.ChangeCart").OnQuery("CartById", [stored]);
         var otherCustomer = Host.Record("Sales.Cart", V(("id", 1L), ("owner", "dev:alice.dev"), ("customer", new RecordRef(8, "Bob")), ("status", "Open"), ("lines", Array.Empty<Dictionary<string, object?>>())));
         Assert.False(Host.Handle("Sales.UpdateCart", otherCustomer, Host.Input("Sales.UpdateCart", V()), new HandlerServices(data, "dev:alice.dev", Now)).Valid);
-        var discontinued = OpenCart(V(("product", new RecordRef(4, "Old")), ("quantity", 1)));
-        Assert.False(Host.Handle("Sales.UpdateCart", discontinued, Host.Input("Sales.UpdateCart", V()), new HandlerServices(data, "dev:alice.dev", Now)).Valid);
+        var lines = OpenCart(V(("product", new RecordRef(2, "Mug")), ("quantity", 1)));
+        Assert.True(Host.Handle("Sales.UpdateCart", lines, Host.Input("Sales.UpdateCart", V()), new HandlerServices(data, "dev:alice.dev", Now)).Valid);
     }
 
     [Fact]
@@ -187,7 +177,7 @@ public sealed class CommerceTests
     {
         var cart = Host.Record("Sales.Cart", V(("customer", new RecordRef(7, "Alice")), ("order", new RecordRef(3, "3")), ("status", "Open"),
             ("lines", Array.Empty<Dictionary<string, object?>>())));
-        var result = Host.Handle("Sales.CreateCart", cart, Host.Input("Sales.CreateCart", V()), new HandlerServices(Catalogue("Sales.OpenCart"), "dev:alice.dev", Now));
+        var result = Host.Handle("Sales.CreateCart", cart, Host.Input("Sales.CreateCart", V()), new HandlerServices(Host.Data("Sales.OpenCart"), "dev:alice.dev", Now));
         Assert.Equal("order", Assert.Single(result.Errors).Field);
     }
 
@@ -220,6 +210,8 @@ public sealed class CommerceTests
         var lines = (List<IReadOnlyDictionary<string, object?>>)order["lines"]!;
         Assert.Equal(new object?[] { 12.35m, 20.00m }, lines.Select(l => l["unitPrice"]));
         Assert.Equal(new object?[] { "Standard", "Reduced" }, lines.Select(l => l["taxClass"]));
+        // The platform copies the sku and name when it creates the lines (snapshots).
+        Assert.All(lines, l => Assert.Null(l["sku"]));
         Assert.Equal(2, ((List<IReadOnlyDictionary<string, object?>>)order["vatBreakdown"]!).Count);
         Assert.DoesNotContain(data.Creates, c => c.Entity == "Sales.OrderLine");
         Assert.Equal(2, data.Creates.Count(c => c.Entity == "Sales.Reservation"));
@@ -249,10 +241,10 @@ public sealed class CommerceTests
 
     // Editing pending orders
 
-    /// <summary>The handler sees the lines with the edit applied: a merged line keeps its id and snapshot, a new line (id
-    /// null, only product and quantity) takes the catalogue price and tax class.</summary>
+    /// <summary>The handler sees the lines with the edit applied: a merged line keeps its id and snapshot, and a new line
+    /// (id null) carries the snapshot the platform copied from the catalogue; every line is priced from its snapshot.</summary>
     [Fact]
-    public void Editing_an_order_keeps_the_price_of_a_staying_product_and_reprices_a_new_one()
+    public void Editing_an_order_prices_every_line_from_its_snapshot()
     {
         var data = Catalogue("Sales.EditOrder", mugPrice: 99.00m);
         var services = new HandlerServices(data, "dev:alice.dev", Now);
@@ -263,7 +255,8 @@ public sealed class CommerceTests
         Has(line, ("id", 10L), ("quantity", 3), ("unitPrice", 12.35m), ("total", 37.05m));
         Assert.Equal(37.05m, more.Changes.Single(c => c.Key == "total").Value);
 
-        var swapped = Host.Handle("Sales.ChangeOrderItem", PendingOrder(V(("product", new RecordRef(3, "Book")), ("quantity", 1))), Host.Input("Sales.ChangeOrderItem",
+        var copied = V(("product", new RecordRef(3, "Book")), ("quantity", 1), ("sku", "BOOK"), ("name", "Book"), ("unitPrice", 20.00m), ("taxClass", "Reduced"));
+        var swapped = Host.Handle("Sales.ChangeOrderItem", PendingOrder(copied), Host.Input("Sales.ChangeOrderItem",
             V(("product", new RecordRef(2, "Mug")), ("quantity", 1), ("newProduct", new RecordRef(3, "Book")))), services);
         var book = Assert.Single(swapped.Children("lines")!);
         Has(book, ("product", 3L), ("sku", "BOOK"), ("unitPrice", 20.00m), ("taxClass", "Reduced"));

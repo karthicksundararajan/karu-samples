@@ -233,6 +233,24 @@ def run(base, folder, postgres):
     alice.command('sales','CancelPaidOrder',cancelled,expected=409)
     assert on_hand() == (before[0], before[1] + 1)
     assert [r['amount'] for r in refunds(cancelled)] == [alice.get('sales','Order',cancelled)['total']]
+    # A discontinued product (refWhen: { status: Active } on cart and order lines): a line that holds it may still grow,
+    # a new line for it is refused, checkout refuses it with the platform's message, and so does replacing a paid order
+    # that holds it, because the replacement's lines set the reference again (design D9 of add-reference-snapshot).
+    gone, _ = product('GONE-1', '5.00', 10)
+    held = cart(alice, ac, gone, 1)
+    replaced_gone = paid_order('gone', (gone, 1))
+    admin.command('catalogue', 'DiscontinueProduct', gone['id'])
+    unavailable = {'errors': [{'field': 'product', 'code': 'reference', 'message': f"Product {gone['id']} is not available."}]}
+    assert alice.command('sales','AddItem',held['id'],{'product':gone['id'],'quantity':1})['lines'][0]['quantity'] == 2
+    fresh = alice.create('sales','Cart',{'customer':ac['id']})
+    assert alice.command('sales','AddItem',fresh['id'],{'product':gone['id'],'quantity':1},422) == unavailable
+    refused = {'errors': [{'field': None, 'code': 'handler', 'message': f"Product {gone['id']} is not available."}]}
+    assert alice.command('sales','Checkout',held['id'],{'requestKey':'gone'},422) == refused
+    assert alice.command('sales','ReplaceOrder',replaced_gone,{'requestKey':'gone'},422) == refused
+    assert alice.get('sales','Order',replaced_gone)['replacement'] is None
+    # Order lines copy the product's sku, name, price and tax class.
+    line = alice.get('sales','Order',replaced_gone)['lines'][0]
+    assert (line['sku'], line['name'], line['unitPrice'], line['taxClass']) == ('GONE-1', 'GONE-1', '5.00', 'Standard'), line
     # Cancellation releases once, and subsequent requests cannot release again.
     cancel_cart = cart(alice,ac)
     cancel_order = alice.command('sales','Checkout',cancel_cart['id'],{'requestKey':'cancel'})['order']['id']

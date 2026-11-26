@@ -29,8 +29,9 @@ internal static class Commerce
 // VAT
 // ---------------------------------------------------------------------------------------------------------------------
 
-/// <summary>One order line to price: the snapshot of a product and its VAT rate (percent).</summary>
-public sealed record PriceInput(long Product, string Sku, string Name, string TaxClass, decimal Rate, decimal UnitPrice, int Quantity, long? LineId = null);
+/// <summary>One order line to price: the snapshot of a product and its VAT rate (percent). A line priced before the order
+/// exists has no sku or name; the platform copies them from the product.</summary>
+public sealed record PriceInput(long Product, string? Sku, string? Name, string TaxClass, decimal Rate, decimal UnitPrice, int Quantity, long? LineId = null);
 /// <summary>A priced line: <c>Amount</c> is unit price × quantity (the list amount), then the amount excluding VAT, the
 /// VAT and the total including VAT.</summary>
 public sealed record PricedLine(PriceInput Line, decimal Amount, decimal Net, decimal Vat, decimal Total);
@@ -93,17 +94,18 @@ internal sealed record TaxRules(string Country, bool PricesIncludeVat, IReadOnly
 /// <summary>Shared order steps: catalogue snapshots, stock reservations and the priced child collections.</summary>
 internal static class Orders
 {
-    /// <summary>A new line from the current catalogue: an active product, its price and its category's tax class.</summary>
+    /// <summary>A line for an order that does not exist yet: the product's current price and its category's tax class.
+    /// The platform copies the sku and name when it creates the line, and refuses a product that is not active.</summary>
     public static PriceInput FromCatalogue(HandlerContext context, TaxRules tax, long productId, int quantity)
     {
         var product = Commerce.One(context, "Catalogue.ProductById", ("productId", productId));
-        if (product.Get<string>("status") != "Active") throw Commerce.Refuse("A product is no longer available.");
         var category = Commerce.One(context, "Catalogue.CategoryById", ("categoryId", product.Ref("category")!.Id));
         var taxClass = category.Get<string>("taxClass");
-        return new(productId, product.Get<string>("sku"), product.Get<string>("name"), taxClass, tax.Rate(taxClass), product.Get<decimal>("price"), quantity);
+        return new(productId, null, null, taxClass, tax.Rate(taxClass), product.Get<decimal>("price"), quantity);
     }
 
-    /// <summary>A stored line, keeping its snapshot (price, names, tax class) and re-reading the country's current rate.</summary>
+    /// <summary>A line of an order, keeping its snapshot (price, names, tax class) and re-reading the country's current rate.
+    /// A new line (id null) has its snapshot too: the platform copied it when the line was added.</summary>
     public static PriceInput FromLine(EntityRecord line, TaxRules tax, bool keepId = true)
     {
         var taxClass = line.Get<string>("taxClass");
@@ -235,29 +237,15 @@ public sealed class ReturnBalance : BalanceHandler { protected override string K
 // Carts
 // ---------------------------------------------------------------------------------------------------------------------
 
-internal static class Carts
-{
-    /// <summary>Every product whose quantity grows compared with <paramref name="before"/> must be active: row filters do
-    /// not apply to references. The lines stay as the platform proposes them (collection commands merge by product).</summary>
-    public static HandlerResult Check(HandlerContext context, EntityRecord cart, IEnumerable<EntityRecord> before)
-    {
-        var was = before.GroupBy(l => l.Ref("product")!.Id).ToDictionary(g => g.Key, g => g.Sum(l => l.Get<int>("quantity")));
-        foreach (var line in cart.Children("lines").Where(l => l.Get<int>("quantity") > was.GetValueOrDefault(l.Ref("product")!.Id)))
-            if (Commerce.One(context, "Catalogue.ProductById", ("productId", line.Ref("product")!.Id)).Get<string>("status") != "Active")
-                return HandlerResult.Fail(null, "The product is unavailable.");
-        return HandlerResult.Ok;
-    }
-}
-
 [KaruContract("Sales.OpenCart")]
 public sealed class OpenCart : CommandHandler
 {
     public override HandlerResult Handle(EntityRecord record, EntityRecord input, HandlerContext context) =>
-        record.IsNull("order") ? Carts.Check(context, record, []) : HandlerResult.Fail("order", "Omit order; it is set at checkout.");
+        record.IsNull("order") ? HandlerResult.Ok : HandlerResult.Fail("order", "Omit order; it is set at checkout.");
 }
 
 /// <summary>The cart grid update, AddItem and ChangeItem, after the platform has applied the edit: only the lines may
-/// change, and a product whose quantity grows must be active.</summary>
+/// change. The platform refuses a new line for a product that is not active (refWhen).</summary>
 [KaruContract("Sales.ChangeCart")]
 public sealed class ChangeCart : CommandHandler
 {
@@ -266,7 +254,7 @@ public sealed class ChangeCart : CommandHandler
         var stored = Commerce.One(context, "CartById", ("cartId", record.Id));
         if (Commerce.Is(input, "UpdateCart") && (record.Ref("customer")?.Id != stored.Ref("customer")?.Id || record.Ref("order")?.Id != stored.Ref("order")?.Id))
             return HandlerResult.Fail(null, "Only the lines of a cart can be changed.");
-        return Carts.Check(context, record, stored.Children("lines"));
+        return HandlerResult.Ok;
     }
 }
 
@@ -294,7 +282,7 @@ public sealed class PlaceOrder : CommandHandler
 }
 
 /// <summary>AddOrderItem, ChangeOrderItem and RemoveOrderItem on a pending order, after the platform has applied the
-/// edit: a line with an id keeps its price snapshot, a new line (id null) takes the current catalogue price. All held
+/// edit: every line is priced from its snapshot, which the platform copied from the catalogue for a new line. All held
 /// stock is released and the new quantities reserved again, then the lines, VAT breakdown and totals are rebuilt.</summary>
 [KaruContract("Sales.EditOrder")]
 public sealed class EditOrder : CommandHandler
@@ -305,7 +293,7 @@ public sealed class EditOrder : CommandHandler
         var stored = record.Children("lines");
         if (stored.Count == 0) return HandlerResult.Fail(null, "An order needs at least one line; cancel the order instead.");
         var tax = TaxRules.For(context, Orders.Country(record));
-        var lines = stored.Select(l => l.Id is null ? Orders.FromCatalogue(context, tax, l.Ref("product")!.Id, l.Get<int>("quantity")) : Orders.FromLine(l, tax)).ToList();
+        var lines = stored.Select(l => Orders.FromLine(l, tax)).ToList();
         var priced = Orders.Price(lines, tax);
         Orders.Release(context, record.Id!.Value);
         Orders.Reserve(context, record.Id!.Value, lines);

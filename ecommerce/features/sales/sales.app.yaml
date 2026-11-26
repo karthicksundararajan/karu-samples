@@ -17,7 +17,10 @@ entities:
     ownership: { field: owner, staff: [Support, Admin] }
   CartLine:
     fields:
-      product: Catalogue.Product
+      product:
+        ref: Catalogue.Product
+        required: true
+        refWhen: { status: Active }
       quantity: Quantity
   Order:
     aggregate: true
@@ -49,12 +52,15 @@ entities:
     ownership: { field: owner, staff: [Support, Warehouse, Admin] }
   OrderLine:
     fields:
-      product: Catalogue.Product
-      sku: { type: string, max: 40, required: true }
-      name: { type: string, max: 200, required: true }
+      product:
+        ref: Catalogue.Product
+        required: true
+        refWhen: { status: Active }
+      sku: { snapshot: product.sku }
+      name: { snapshot: product.name }
       quantity: Quantity
-      unitPrice: Money
-      taxClass: Tax.TaxClass
+      unitPrice: { snapshot: product.price }
+      taxClass: { snapshot: product.category.taxClass }
       vatRate: Tax.Percent
       totalExclVAT: { type: Money, required: true, renamedFrom: net }
       totalVAT: { type: Money, required: true, renamedFrom: vat }
@@ -86,11 +92,10 @@ contracts:
   OpenCart:
     kind: commandHandler
     input: Cart
-    data: { queries: [Catalogue.ProductById] }
   ChangeCart:
     kind: commandHandler
     input: Cart
-    data: { queries: [Catalogue.ProductById, CartById] }
+    data: { queries: [CartById] }
   PlaceOrder:
     kind: commandHandler
     input: Cart
@@ -108,13 +113,7 @@ contracts:
     kind: commandHandler
     input: Order
     data:
-      queries:
-        - HeldReservations
-        - Catalogue.ProductById
-        - Catalogue.StockByProduct
-        - Catalogue.CategoryById
-        - Tax.CountryByCode
-        - Tax.VatRatesFor
+      queries: [HeldReservations, Catalogue.StockByProduct, Tax.CountryByCode, Tax.VatRatesFor]
       creates: [Reservation]
       commands: [Catalogue.ReserveStock, Catalogue.ReleaseStock, ReleaseReservation]
   StartReplacement:
