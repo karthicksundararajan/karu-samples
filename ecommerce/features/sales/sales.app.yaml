@@ -10,7 +10,7 @@ entities:
       status: { type: enum, required: true, values: [Open, CheckedOut], default: Open }
       order: Order?
     children:
-      lines: { entity: CartLine, readonlyWhen: { status: CheckedOut } }
+      lines: { entity: CartLine, key: product, readonlyWhen: { status: CheckedOut } }
     ownership: { field: owner, staff: [Support, Admin] }
   CartLine:
     fields:
@@ -41,7 +41,7 @@ entities:
       replaces: Order?
       replacement: Order?
     children:
-      lines: OrderLine
+      lines: { entity: OrderLine, key: product }
       vatBreakdown: OrderVat
     ownership: { field: owner, staff: [Support, Warehouse, Admin] }
   OrderLine:
@@ -49,7 +49,7 @@ entities:
       product: Catalogue.Product
       sku: { type: string, max: 40, required: true }
       name: { type: string, max: 200, required: true }
-      quantity: Catalogue.Units
+      quantity: Quantity
       unitPrice: Catalogue.Money
       taxClass: Tax.TaxClass
       vatRate: Tax.Percent
@@ -242,25 +242,18 @@ commands:
   AddItem:
     'on': Cart
     handler: ChangeCart
-    input:
-      product: Catalogue.Product
-      quantity: Quantity
+    collection: { name: lines, action: add, merge: { quantity: sum } }
     availableWhen:
       status: Open
   ChangeItem:
     'on': Cart
     handler: ChangeCart
-    input:
-      product: Catalogue.Product
-      quantity: Quantity
-      newProduct: Catalogue.Product?
+    collection: { name: lines, action: change, merge: { quantity: sum } }
     availableWhen:
       status: Open
   RemoveItem:
     'on': Cart
-    handler: ChangeCart
-    input:
-      product: Catalogue.Product
+    collection: { name: lines, action: remove }
     availableWhen:
       status: Open
   SealCart:
@@ -279,25 +272,19 @@ commands:
   AddOrderItem:
     'on': Order
     handler: EditOrder
-    input:
-      product: Catalogue.Product
-      quantity: Quantity
+    collection: { name: lines, action: add, fields: [quantity], merge: { quantity: sum } }
     availableWhen:
       status: PendingPayment
   ChangeOrderItem:
     'on': Order
     handler: EditOrder
-    input:
-      product: Catalogue.Product
-      quantity: Quantity
-      newProduct: Catalogue.Product?
+    collection: { name: lines, action: change, fields: [quantity], merge: { quantity: sum } }
     availableWhen:
       status: PendingPayment
   RemoveOrderItem:
     'on': Order
     handler: EditOrder
-    input:
-      product: Catalogue.Product
+    collection: { name: lines, action: remove }
     availableWhen:
       status: PendingPayment
   ReplaceOrder:

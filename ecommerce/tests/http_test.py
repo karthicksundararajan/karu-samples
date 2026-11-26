@@ -95,8 +95,12 @@ def run(base, folder, postgres):
     current = alice.get('sales','Cart',edit['id'])
     first = current['lines'][0]
     grid = {'customer': ac['id'], 'order': None}
+    # Lines are keyed by product: an update that lists a product twice is refused, not merged.
+    duplicate = alice.call('PUT', f"/api/data/sales/Cart/{edit['id']}", {**grid, 'lines': [
+        {'id': first['id'], 'product': p['id'], 'quantity': 1}, {'product': p['id'], 'quantity': 2}]}, 422)
+    assert [(e['field'], e['code']) for e in duplicate['errors']] == [('lines[1].product', 'duplicateKey')], duplicate
     updated = alice.call('PUT', f"/api/data/sales/Cart/{edit['id']}", {**grid, 'lines': [
-        {'id': first['id'], 'product': p['id'], 'quantity': 1}, {'product': p['id'], 'quantity': 2}, {'product': p2['id'], 'quantity': 1}]})
+        {'id': first['id'], 'product': p['id'], 'quantity': 3}, {'product': p2['id'], 'quantity': 1}]})
     lines = {l['product']['id']: l for l in updated['lines']}
     assert len(updated['lines']) == 2 and lines[p['id']]['quantity'] == 3 and lines[p['id']]['id'] == first['id'] and lines[p2['id']]['quantity'] == 1, updated
     alice.call('PUT', f"/api/data/sales/Cart/{edit['id']}", {**grid, 'lines': [{'product': p['id'], 'quantity': 1, 'unitPrice': '0.01'}]}, 422)
@@ -106,7 +110,8 @@ def run(base, folder, postgres):
     alice.command('sales','ChangeItem',edit['id'],{'product':p2['id'],'quantity':4})
     changed = alice.command('sales','ChangeItem',edit['id'],{'product':p2['id'],'quantity':4,'newProduct':p['id']})
     assert [(l['product']['id'], l['quantity']) for l in changed['lines']] == [(p['id'], 7)], changed
-    alice.command('sales','ChangeItem',edit['id'],{'product':p2['id'],'quantity':1},422)
+    missing = alice.command('sales','ChangeItem',edit['id'],{'product':p2['id'],'quantity':1},422)
+    assert [(e['field'], e['code']) for e in missing['errors']] == [('product', 'notFound')], missing
     assert alice.command('sales','RemoveItem',edit['id'],{'product':p['id']})['lines'] == []
     alice.create('sales','Cart',{'customer':bc['id']},422)
     alice.create('sales','Cart',{'customer':ac['id'],'owner':'dev:bob.dev'},422)

@@ -146,16 +146,29 @@ public sealed class CommerceTests
     static EntityRecord OpenCart(params Dictionary<string, object?>[] lines) => Host.Record("Sales.Cart", V(("id", 1L), ("owner", "dev:alice.dev"),
         ("customer", new RecordRef(7, "Alice")), ("status", "Open"), ("lines", lines)));
 
+    /// <summary>AddItem has already merged the line: the handler accepts it and leaves the lines as proposed.</summary>
     [Fact]
-    public void Cart_changes_merge_duplicate_products_and_keep_the_first_line()
+    public void Adding_to_a_cart_leaves_the_proposed_lines()
     {
         var stored = OpenCart(V(("id", 5L), ("product", new RecordRef(2, "Mug")), ("quantity", 1)));
         var data = Catalogue("Sales.ChangeCart").OnQuery("CartById", [stored]);
-        var submitted = OpenCart(V(("id", 5L), ("product", new RecordRef(2, "Mug")), ("quantity", 1)), V(("product", new RecordRef(2, "Mug")), ("quantity", 2)));
-        var result = Host.Handle("Sales.UpdateCart", submitted, Host.Input("Sales.UpdateCart", V()), new HandlerServices(data, "dev:alice.dev", Now));
+        var proposed = OpenCart(V(("id", 5L), ("product", new RecordRef(2, "Mug")), ("quantity", 3)));
+        var result = Host.Handle("Sales.AddItem", proposed, Host.Input("Sales.AddItem", V(("product", new RecordRef(2, "Mug")), ("quantity", 2))),
+            new HandlerServices(data, "dev:alice.dev", Now));
         Assert.True(result.Valid);
-        var line = Assert.Single(result.Children("lines")!);
-        Has(line, ("id", 5L), ("product", 2L), ("quantity", 3));
+        Assert.Null(result.Children("lines"));
+    }
+
+    /// <summary>A discontinued product may stay or shrink in a cart, but its quantity cannot grow.</summary>
+    [Fact]
+    public void An_unavailable_product_cannot_grow()
+    {
+        var stored = OpenCart(V(("id", 5L), ("product", new RecordRef(4, "Old")), ("quantity", 2)));
+        var data = Catalogue("Sales.ChangeCart").OnQuery("CartById", [stored]);
+        HandlerOutcome Change(int quantity) => Host.Handle("Sales.ChangeItem", OpenCart(V(("id", 5L), ("product", new RecordRef(4, "Old")), ("quantity", quantity))),
+            Host.Input("Sales.ChangeItem", V(("product", new RecordRef(4, "Old")), ("quantity", quantity))), new HandlerServices(data, "dev:alice.dev", Now));
+        Assert.True(Change(1).Valid);
+        Assert.Equal("The product is unavailable.", Assert.Single(Change(3).Errors).Message);
     }
 
     [Fact]
@@ -167,15 +180,6 @@ public sealed class CommerceTests
         Assert.False(Host.Handle("Sales.UpdateCart", otherCustomer, Host.Input("Sales.UpdateCart", V()), new HandlerServices(data, "dev:alice.dev", Now)).Valid);
         var discontinued = OpenCart(V(("product", new RecordRef(4, "Old")), ("quantity", 1)));
         Assert.False(Host.Handle("Sales.UpdateCart", discontinued, Host.Input("Sales.UpdateCart", V()), new HandlerServices(data, "dev:alice.dev", Now)).Valid);
-    }
-
-    [Fact]
-    public void Removing_a_cart_product_deletes_its_line()
-    {
-        var cart = OpenCart(V(("id", 5L), ("product", new RecordRef(2, "Mug")), ("quantity", 1)), V(("id", 6L), ("product", new RecordRef(3, "Book")), ("quantity", 1)));
-        var data = Catalogue("Sales.ChangeCart").OnQuery("CartById", [cart]);
-        var result = Host.Handle("Sales.RemoveItem", cart, Host.Input("Sales.RemoveItem", V(("product", new RecordRef(2, "Mug")))), new HandlerServices(data, "dev:alice.dev", Now));
-        Assert.Equal(new object?[] { 6L }, result.Children("lines")!.Select(l => l["id"]));
     }
 
     [Fact]
@@ -245,22 +249,25 @@ public sealed class CommerceTests
 
     // Editing pending orders
 
+    /// <summary>The handler sees the lines with the edit applied: a merged line keeps its id and snapshot, a new line (id
+    /// null, only product and quantity) takes the catalogue price and tax class.</summary>
     [Fact]
     public void Editing_an_order_keeps_the_price_of_a_staying_product_and_reprices_a_new_one()
     {
         var data = Catalogue("Sales.EditOrder", mugPrice: 99.00m);
-        var order = PendingOrder(Line(10, 2, 2, 12.35m));
         var services = new HandlerServices(data, "dev:alice.dev", Now);
 
-        var more = Host.Handle("Sales.AddOrderItem", order, Host.Input("Sales.AddOrderItem", V(("product", new RecordRef(2, "Mug")), ("quantity", 1))), services);
+        var more = Host.Handle("Sales.AddOrderItem", PendingOrder(Line(10, 2, 3, 12.35m)),
+            Host.Input("Sales.AddOrderItem", V(("product", new RecordRef(2, "Mug")), ("quantity", 1))), services);
         var line = Assert.Single(more.Children("lines")!);
         Has(line, ("id", 10L), ("quantity", 3), ("unitPrice", 12.35m), ("total", 37.05m));
         Assert.Equal(37.05m, more.Changes.Single(c => c.Key == "total").Value);
 
-        var swapped = Host.Handle("Sales.ChangeOrderItem", order, Host.Input("Sales.ChangeOrderItem",
+        var swapped = Host.Handle("Sales.ChangeOrderItem", PendingOrder(V(("product", new RecordRef(3, "Book")), ("quantity", 1))), Host.Input("Sales.ChangeOrderItem",
             V(("product", new RecordRef(2, "Mug")), ("quantity", 1), ("newProduct", new RecordRef(3, "Book")))), services);
         var book = Assert.Single(swapped.Children("lines")!);
-        Has(book, ("id", 10L), ("product", 3L), ("unitPrice", 20.00m), ("taxClass", "Reduced"));
+        Has(book, ("product", 3L), ("sku", "BOOK"), ("unitPrice", 20.00m), ("taxClass", "Reduced"));
+        Assert.False(book.ContainsKey("id"));
         Assert.Equal("Reduced", Assert.Single(swapped.Children("vatBreakdown")!)["taxClass"]);
     }
 
@@ -268,7 +275,7 @@ public sealed class CommerceTests
     public void Editing_an_order_releases_and_reserves_its_stock_again()
     {
         var data = Catalogue("Sales.EditOrder").OnQuery("HeldReservations", [Host.Record("Sales.Reservation", V(("id", 30L), ("stock", new RecordRef(102, "Mug")), ("quantity", 2)))]);
-        var order = PendingOrder(Line(10, 2, 2, 12.35m));
+        var order = PendingOrder(Line(10, 2, 5, 12.35m));
         var result = Host.Handle("Sales.ChangeOrderItem", order, Host.Input("Sales.ChangeOrderItem", V(("product", new RecordRef(2, "Mug")), ("quantity", 5))),
             new HandlerServices(data, "dev:alice.dev", Now));
         Assert.True(result.Valid);
@@ -280,7 +287,7 @@ public sealed class CommerceTests
     public void The_last_line_of_an_order_cannot_be_removed()
     {
         var data = Catalogue("Sales.EditOrder");
-        var result = Host.Handle("Sales.RemoveOrderItem", PendingOrder(Line(10, 2, 2, 12.35m)),
+        var result = Host.Handle("Sales.RemoveOrderItem", PendingOrder(),
             Host.Input("Sales.RemoveOrderItem", V(("product", new RecordRef(2, "Mug")))), new HandlerServices(data, "dev:alice.dev", Now));
         Assert.False(result.Valid);
         Assert.Contains("cancel the order", Assert.Single(result.Errors).Message);

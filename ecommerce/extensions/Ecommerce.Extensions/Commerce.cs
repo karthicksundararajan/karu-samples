@@ -5,7 +5,6 @@ namespace Ecommerce.Extensions;
 
 internal static class Commerce
 {
-    public const int MaxLineQuantity = 1000000;
     public static Dictionary<string, object?> Values(params (string Key, object? Value)[] values) => values.ToDictionary(v => v.Key, v => v.Value);
     public static IReadOnlyList<EntityRecord> All(HandlerContext context, string query, params (string Key, object? Value)[] parameters)
     {
@@ -95,13 +94,13 @@ internal sealed record TaxRules(string Country, bool PricesIncludeVat, IReadOnly
 internal static class Orders
 {
     /// <summary>A new line from the current catalogue: an active product, its price and its category's tax class.</summary>
-    public static PriceInput FromCatalogue(HandlerContext context, TaxRules tax, long productId, int quantity, long? lineId = null)
+    public static PriceInput FromCatalogue(HandlerContext context, TaxRules tax, long productId, int quantity)
     {
         var product = Commerce.One(context, "Catalogue.ProductById", ("productId", productId));
         if (product.Get<string>("status") != "Active") throw Commerce.Refuse("A product is no longer available.");
         var category = Commerce.One(context, "Catalogue.CategoryById", ("categoryId", product.Ref("category")!.Id));
         var taxClass = category.Get<string>("taxClass");
-        return new(productId, product.Get<string>("sku"), product.Get<string>("name"), taxClass, tax.Rate(taxClass), product.Get<decimal>("price"), quantity, lineId);
+        return new(productId, product.Get<string>("sku"), product.Get<string>("name"), taxClass, tax.Rate(taxClass), product.Get<decimal>("price"), quantity);
     }
 
     /// <summary>A stored line, keeping its snapshot (price, names, tax class) and re-reading the country's current rate.</summary>
@@ -236,64 +235,38 @@ public sealed class ReturnBalance : BalanceHandler { protected override string K
 // Carts
 // ---------------------------------------------------------------------------------------------------------------------
 
-internal sealed record CartItem(long? Id, long Product, long Quantity);
-
 internal static class Carts
 {
-    /// <summary>The cart's new lines: duplicates merged (keeping the first line id), at most 1,000,000 per line, and every
-    /// product whose quantity grows compared with <paramref name="before"/> must be active.</summary>
-    public static HandlerResult Lines(HandlerContext context, IEnumerable<CartItem> lines, IEnumerable<EntityRecord> before)
+    /// <summary>Every product whose quantity grows compared with <paramref name="before"/> must be active: row filters do
+    /// not apply to references. The lines stay as the platform proposes them (collection commands merge by product).</summary>
+    public static HandlerResult Check(HandlerContext context, EntityRecord cart, IEnumerable<EntityRecord> before)
     {
-        var merged = lines.GroupBy(l => l.Product)
-            .Select(g => new CartItem(g.Select(l => l.Id).FirstOrDefault(id => id is not null), g.Key, g.Sum(l => l.Quantity))).ToList();
-        if (merged.Any(l => l.Quantity > Commerce.MaxLineQuantity)) return HandlerResult.Fail(null, "A cart line may contain at most 1,000,000 items.");
-        var was = before.GroupBy(l => l.Ref("product")!.Id).ToDictionary(g => g.Key, g => (long)g.Sum(l => l.Get<int>("quantity")));
-        foreach (var line in merged.Where(l => l.Quantity > was.GetValueOrDefault(l.Product)))
-            if (Commerce.One(context, "Catalogue.ProductById", ("productId", line.Product)).Get<string>("status") != "Active")
+        var was = before.GroupBy(l => l.Ref("product")!.Id).ToDictionary(g => g.Key, g => g.Sum(l => l.Get<int>("quantity")));
+        foreach (var line in cart.Children("lines").Where(l => l.Get<int>("quantity") > was.GetValueOrDefault(l.Ref("product")!.Id)))
+            if (Commerce.One(context, "Catalogue.ProductById", ("productId", line.Ref("product")!.Id)).Get<string>("status") != "Active")
                 return HandlerResult.Fail(null, "The product is unavailable.");
-        return HandlerResult.Ok.SetChildren("lines", merged.Select(l =>
-        {
-            var item = Commerce.Values(("product", l.Product), ("quantity", (int)l.Quantity));
-            if (l.Id is { } id) item["id"] = id;
-            return (IReadOnlyDictionary<string, object?>)item;
-        }));
+        return HandlerResult.Ok;
     }
-
-    public static List<CartItem> Items(EntityRecord record) =>
-        record.Children("lines").Select(l => new CartItem(l.Id, l.Ref("product")!.Id, l.Get<int>("quantity"))).ToList();
 }
 
 [KaruContract("Sales.OpenCart")]
 public sealed class OpenCart : CommandHandler
 {
     public override HandlerResult Handle(EntityRecord record, EntityRecord input, HandlerContext context) =>
-        record.IsNull("order") ? Carts.Lines(context, Carts.Items(record), []) : HandlerResult.Fail("order", "Omit order; it is set at checkout.");
+        record.IsNull("order") ? Carts.Check(context, record, []) : HandlerResult.Fail("order", "Omit order; it is set at checkout.");
 }
 
-/// <summary>Every cart change (grid update, AddItem, ChangeItem, RemoveItem) rewrites the lines through <see cref="Carts.Lines"/>.</summary>
+/// <summary>The cart grid update, AddItem and ChangeItem, after the platform has applied the edit: only the lines may
+/// change, and a product whose quantity grows must be active.</summary>
 [KaruContract("Sales.ChangeCart")]
 public sealed class ChangeCart : CommandHandler
 {
     public override HandlerResult Handle(EntityRecord record, EntityRecord input, HandlerContext context)
     {
         var stored = Commerce.One(context, "CartById", ("cartId", record.Id));
-        var lines = Carts.Items(record);
-        if (Commerce.Is(input, "UpdateCart"))
-        {
-            if (record.Ref("customer")?.Id != stored.Ref("customer")?.Id || record.Ref("order")?.Id != stored.Ref("order")?.Id)
-                return HandlerResult.Fail(null, "Only the lines of a cart can be changed.");
-            return Carts.Lines(context, lines, stored.Children("lines"));
-        }
-        var product = input.Ref("product")!.Id;
-        if (Commerce.Is(input, "AddItem")) lines.Add(new CartItem(null, product, input.Get<int>("quantity")));
-        else
-        {
-            var index = lines.FindIndex(l => l.Product == product);
-            if (index < 0) return HandlerResult.Fail(null, "The product is not in the cart.");
-            if (Commerce.Is(input, "RemoveItem")) lines.RemoveAll(l => l.Product == product);
-            else lines[index] = lines[index] with { Product = input.Ref("newProduct")?.Id ?? product, Quantity = input.Get<int>("quantity") };
-        }
-        return Carts.Lines(context, lines, stored.Children("lines"));
+        if (Commerce.Is(input, "UpdateCart") && (record.Ref("customer")?.Id != stored.Ref("customer")?.Id || record.Ref("order")?.Id != stored.Ref("order")?.Id))
+            return HandlerResult.Fail(null, "Only the lines of a cart can be changed.");
+        return Carts.Check(context, record, stored.Children("lines"));
     }
 }
 
@@ -320,50 +293,19 @@ public sealed class PlaceOrder : CommandHandler
     }
 }
 
-/// <summary>AddOrderItem, ChangeOrderItem and RemoveOrderItem on a pending order. A product that stays keeps its price
-/// snapshot; a new or swapped-in product takes the current catalogue price. All held stock is released and the new
-/// quantities reserved again, then the lines, VAT breakdown and totals are rebuilt.</summary>
+/// <summary>AddOrderItem, ChangeOrderItem and RemoveOrderItem on a pending order, after the platform has applied the
+/// edit: a line with an id keeps its price snapshot, a new line (id null) takes the current catalogue price. All held
+/// stock is released and the new quantities reserved again, then the lines, VAT breakdown and totals are rebuilt.</summary>
 [KaruContract("Sales.EditOrder")]
 public sealed class EditOrder : CommandHandler
 {
     public override HandlerResult Handle(EntityRecord record, EntityRecord input, HandlerContext context)
     {
-        if (record.Get<string>("status") != "PendingPayment") return HandlerResult.Fail(null, "Only pending orders can be changed.");
         if (context.UtcNow >= record.Get<DateTime>("expiresAt")) return HandlerResult.Fail(null, "This order has expired.");
+        var stored = record.Children("lines");
+        if (stored.Count == 0) return HandlerResult.Fail(null, "An order needs at least one line; cancel the order instead.");
         var tax = TaxRules.For(context, Orders.Country(record));
-        var lines = record.Children("lines").Select(l => Orders.FromLine(l, tax)).ToList();
-        var product = input.Ref("product")!.Id;
-        var index = lines.FindIndex(l => l.Product == product);
-        if (Commerce.Is(input, "AddOrderItem"))
-        {
-            var quantity = input.Get<int>("quantity");
-            if (index >= 0) lines[index] = lines[index] with { Quantity = (int)Math.Min((long)lines[index].Quantity + quantity, int.MaxValue) };
-            else lines.Add(Orders.FromCatalogue(context, tax, product, quantity));
-        }
-        else
-        {
-            if (index < 0) return HandlerResult.Fail(null, "The product is not in this order.");
-            if (Commerce.Is(input, "RemoveOrderItem"))
-            {
-                if (lines.Count == 1) return HandlerResult.Fail(null, "An order needs at least one line; cancel the order instead.");
-                lines.RemoveAt(index);
-            }
-            else
-            {
-                var quantity = input.Get<int>("quantity");
-                var target = input.Ref("newProduct")?.Id ?? product;
-                if (target == product) lines[index] = lines[index] with { Quantity = quantity };
-                else
-                {
-                    var line = lines[index];
-                    lines.RemoveAt(index);
-                    var other = lines.FindIndex(l => l.Product == target);
-                    if (other >= 0) lines[other] = lines[other] with { Quantity = (int)Math.Min((long)lines[other].Quantity + quantity, int.MaxValue) };
-                    else lines.Insert(index, Orders.FromCatalogue(context, tax, target, quantity, line.LineId));
-                }
-            }
-        }
-        if (lines.Any(l => l.Quantity > Commerce.MaxLineQuantity)) return HandlerResult.Fail(null, "An order line may contain at most 1,000,000 items.");
+        var lines = stored.Select(l => l.Id is null ? Orders.FromCatalogue(context, tax, l.Ref("product")!.Id, l.Get<int>("quantity")) : Orders.FromLine(l, tax)).ToList();
         var priced = Orders.Price(lines, tax);
         Orders.Release(context, record.Id!.Value);
         Orders.Reserve(context, record.Id!.Value, lines);
