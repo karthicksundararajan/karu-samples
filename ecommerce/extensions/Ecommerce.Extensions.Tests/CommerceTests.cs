@@ -35,14 +35,14 @@ public sealed class CommerceTests
                 ? [Rate("Standard", 8.1m), Rate("Reduced", 2.6m), Rate("Special", 3.8m)]
                 : [Rate("Standard", 8.0m), Rate("Reduced", 2.0m)]);
         if (grants.Queries.Contains("Catalogue.ProductById"))
-            data.OnQuery("Catalogue.ProductById", p => (long)p["productId"]! switch
+            data.OnQuery("Catalogue.ProductById", p => Convert.ToInt64(p["productId"]) switch
             {
                 2L => [Product(2, "MUG", "Mug", mugPrice, category: 10)],
                 3L => [Product(3, "BOOK", "Book", 20.00m, category: 11)],
                 _ => [Product(4, "OLD", "Old", 1.00m, category: 10, status: "Discontinued")],
             });
         if (grants.Queries.Contains("Catalogue.CategoryById"))
-            data.OnQuery("Catalogue.CategoryById", p => [Host.Record("Catalogue.Category", V(("id", p["categoryId"]), ("taxClass", (long)p["categoryId"]! == 11L ? "Reduced" : "Standard")))]);
+            data.OnQuery("Catalogue.CategoryById", p => [Host.Record("Catalogue.Category", V(("id", Convert.ToInt64(p["categoryId"])), ("taxClass", Convert.ToInt64(p["categoryId"]) == 11L ? "Reduced" : "Standard")))]);
         if (grants.Queries.Contains("Catalogue.StockByProduct"))
             data.OnQuery("Catalogue.StockByProduct", p => [Host.Record("Catalogue.Stock", V(("id", 100L + (long)p["productId"]!), ("onHand", 50), ("reserved", 0)))]);
         return data;
@@ -210,8 +210,8 @@ public sealed class CommerceTests
         var lines = (List<IReadOnlyDictionary<string, object?>>)order["lines"]!;
         Assert.Equal(new object?[] { 12.35m, 20.00m }, lines.Select(l => l["unitPrice"]));
         Assert.Equal(new object?[] { "Standard", "Reduced" }, lines.Select(l => l["taxClass"]));
-        // The platform copies the sku and name when it creates the lines (snapshots).
-        Assert.All(lines, l => Assert.Null(l["sku"]));
+        // The platform copies the sku and name when it creates the lines (snapshots): a typed write leaves them out.
+        Assert.All(lines, l => Assert.False(l.ContainsKey("sku")));
         Assert.Equal(2, ((List<IReadOnlyDictionary<string, object?>>)order["vatBreakdown"]!).Count);
         Assert.DoesNotContain(data.Creates, c => c.Entity == "Sales.OrderLine");
         Assert.Equal(2, data.Creates.Count(c => c.Entity == "Sales.Reservation"));

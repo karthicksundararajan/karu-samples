@@ -1,23 +1,17 @@
 using System.Globalization;
 using Karu.Extensions.Sdk;
+using Karu.Generated.Catalogue;
+using Karu.Generated.Customers;
+using Karu.Generated.Sales;
+using Karu.Generated.Tax;
 
 namespace Ecommerce.Extensions;
 
 internal static class Commerce
 {
     public static Dictionary<string, object?> Values(params (string Key, object? Value)[] values) => values.ToDictionary(v => v.Key, v => v.Value);
-    public static IReadOnlyList<EntityRecord> All(HandlerContext context, string query, params (string Key, object? Value)[] parameters)
-    {
-        var rows = new List<EntityRecord>();
-        for (var page = 1; ; page++)
-        {
-            var result = context.Data.Query(query, Values(parameters), page);
-            rows.AddRange(result.Rows);
-            if (rows.Count >= result.Total || result.Rows.Count == 0) return rows;
-        }
-    }
-    public static EntityRecord One(HandlerContext context, string query, params (string Key, object? Value)[] parameters) =>
-        All(context, query, parameters).SingleOrDefault() ?? throw new HandlerDataException("The related record does not exist.");
+    /// <summary>The one row of a by-id or by-key query; no row is a refusal.</summary>
+    public static T One<T>(IReadOnlyList<T> rows) => rows.Count == 0 ? throw new HandlerDataException("The related record does not exist.") : rows.Single();
     public static string Id(long id) => id.ToString(CultureInfo.InvariantCulture);
     public static bool Staff(RowFilterContext context) => context.Roles.Overlaps(["CatalogueManager", "Warehouse", "Support", "Admin", "System"]);
     /// <summary>A business refusal from inside a helper; the invoker returns it as a handler error and the write rolls back.</summary>
@@ -81,11 +75,11 @@ internal sealed record TaxRules(string Country, bool PricesIncludeVat, IReadOnly
 {
     public static TaxRules For(HandlerContext context, string country)
     {
-        var found = Commerce.All(context, "Tax.CountryByCode", ("code", country));
+        var found = context.Data.CountryByCode(country);
         if (found.Count == 0) throw Commerce.Refuse($"We cannot sell to {country}.");
-        var rates = Commerce.All(context, "Tax.VatRatesFor", ("countryId", found[0].Id))
-            .GroupBy(r => r.Get<string>("taxClass")).ToDictionary(g => g.Key, g => g.First().Get<decimal>("rate"));
-        return new(country, found[0].Get<bool>("pricesIncludeVAT"), rates);
+        var rates = context.Data.VatRatesFor(found[0].Id!.Value)
+            .GroupBy(r => r.TaxClass.ToString()).ToDictionary(g => g.Key, g => g.First().Rate);
+        return new(country, found[0].PricesIncludeVAT, rates);
     }
 
     public decimal Rate(string taxClass) => Rates.TryGetValue(taxClass, out var rate) ? rate : throw Commerce.Refuse($"We cannot sell to {Country}.");
@@ -98,10 +92,9 @@ internal static class Orders
     /// The platform copies the sku and name when it creates the line, and refuses a product that is not active.</summary>
     public static PriceInput FromCatalogue(HandlerContext context, TaxRules tax, long productId, int quantity)
     {
-        var product = Commerce.One(context, "Catalogue.ProductById", ("productId", productId));
-        var category = Commerce.One(context, "Catalogue.CategoryById", ("categoryId", product.Ref("category")!.Id));
-        var taxClass = category.Get<string>("taxClass");
-        return new(productId, null, null, taxClass, tax.Rate(taxClass), product.Get<decimal>("price"), quantity);
+        var product = Commerce.One(context.Data.ProductById(checked((int)productId)));
+        var taxClass = Commerce.One(context.Data.CategoryById(checked((int)product.Category.Id))).TaxClass.ToString();
+        return new(productId, null, null, taxClass, tax.Rate(taxClass), product.Price, quantity);
     }
 
     /// <summary>A line of an order, keeping its snapshot (price, names, tax class) and re-reading the country's current rate.
@@ -132,19 +125,23 @@ internal static class Orders
     public static IReadOnlyDictionary<string, object?> Item(VatRow row) =>
         Commerce.Values(("taxClass", row.TaxClass), ("rate", row.Rate), ("totalExclVAT", row.Net), ("totalVAT", row.Vat), ("total", row.Gross));
 
-    /// <summary>The order values of a new order: totals, lines and VAT breakdown.</summary>
-    public static Dictionary<string, object?> Values(PricedOrder priced, params (string Key, object? Value)[] values)
+    /// <summary>Creates a pending order, payable for 30 minutes, with its totals, lines and VAT breakdown.</summary>
+    public static long Create(HandlerContext context, PricedOrder priced, string owner, long customer, AddressValue shipping, OrderCurrency currency,
+        string? cartId = null, long? replaces = null) => context.Data.CreateOrder(new()
     {
-        var all = Commerce.Values(values);
-        all["pricesIncludeVAT"] = priced.PricesIncludeVat;
-        all["subtotal"] = priced.Subtotal;
-        all["totalExclVAT"] = priced.Net;
-        all["totalVAT"] = priced.VatTotal;
-        all["total"] = priced.Total;
-        all["lines"] = priced.Lines.Select(Item).ToList();
-        all["vatBreakdown"] = priced.Vat.Select(Item).ToList();
-        return all;
-    }
+        Owner = owner, CartId = cartId, Customer = customer, Shipping = shipping, Currency = currency, Replaces = replaces,
+        PlacedAt = context.UtcNow, ExpiresAt = context.UtcNow.AddMinutes(30),
+        PricesIncludeVAT = priced.PricesIncludeVat, Subtotal = priced.Subtotal, TotalExclVAT = priced.Net, TotalVAT = priced.VatTotal, Total = priced.Total,
+        Lines = priced.Lines.Select(l => new OrderLineValues
+        {
+            Product = l.Line.Product, Sku = l.Line.Sku, Name = l.Line.Name, Quantity = l.Line.Quantity, UnitPrice = l.Line.UnitPrice,
+            TaxClass = Enum.Parse<CategoryTaxClass>(l.Line.TaxClass), VatRate = l.Line.Rate, TotalExclVAT = l.Net, TotalVAT = l.Vat, Total = l.Total,
+        }).ToList(),
+        VatBreakdown = priced.Vat.Select(v => new OrderVatValues
+        {
+            TaxClass = Enum.Parse<OrderVatTaxClass>(v.TaxClass), Rate = v.Rate, TotalExclVAT = v.Net, TotalVAT = v.Vat, Total = v.Gross,
+        }).ToList(),
+    });
 
     /// <summary>The changes of an existing order: totals, lines (by id) and a rebuilt VAT breakdown.</summary>
     public static HandlerResult Changes(PricedOrder priced) => HandlerResult.Ok
@@ -158,24 +155,24 @@ internal static class Orders
         foreach (var product in lines.GroupBy(l => l.Product))
         {
             var quantity = product.Sum(l => l.Quantity);
-            var stock = Commerce.One(context, "Catalogue.StockByProduct", ("productId", product.Key));
-            if ((long)stock.Get<int>("onHand") - stock.Get<int>("reserved") < quantity) throw Commerce.Refuse("Insufficient stock.");
-            context.Data.Run("Catalogue.ReserveStock", stock.Id!.Value, Commerce.Values(("quantity", quantity)));
-            context.Data.Create("Reservation", Commerce.Values(("order", orderId), ("stock", stock.Id), ("quantity", quantity)));
+            var stock = Commerce.One(context.Data.StockByProduct(product.Key));
+            if ((long)stock.OnHand - stock.Reserved < quantity) throw Commerce.Refuse("Insufficient stock.");
+            context.Data.ReserveStock(stock.Id!.Value, new() { Quantity = quantity });
+            context.Data.CreateReservation(new() { Order = orderId, Stock = stock.Id.Value, Quantity = quantity });
         }
     }
 
     /// <summary>Releases every held reservation of the order.</summary>
     public static void Release(HandlerContext context, long orderId)
     {
-        foreach (var reservation in Commerce.All(context, "HeldReservations", ("orderId", orderId)))
+        foreach (var reservation in context.Data.HeldReservations(orderId))
         {
-            context.Data.Run("Catalogue.ReleaseStock", reservation.Ref("stock")!.Id, Commerce.Values(("quantity", reservation.Get<int>("quantity"))));
-            context.Data.Run("ReleaseReservation", reservation.Id!.Value);
+            context.Data.ReleaseStock(reservation.Stock.Id, new() { Quantity = reservation.Quantity });
+            context.Data.ReleaseReservation(reservation.Id!.Value);
         }
     }
 
-    public static string Country(EntityRecord withShipping) => withShipping.GetValueObject("shipping")!.Get<string>("country");
+    public static string Country(EntityRecord order) => Order.Wrap(order).Shipping.Country;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -203,35 +200,35 @@ public sealed class ValidStock : Rule
 
 public abstract class BalanceHandler : CommandHandler
 {
-    protected abstract string Kind { get; }
+    protected abstract StockMovementKind Kind { get; }
     public override HandlerResult Handle(EntityRecord record, EntityRecord input, HandlerContext context)
     {
         var quantity = input.Get<int>("quantity");
         long onHand = record.Get<int>("onHand"), reserved = record.Get<int>("reserved");
         switch (Kind)
         {
-            case "Adjustment": onHand += quantity; break;
-            case "Reservation": reserved += quantity; break;
-            case "Release": reserved -= quantity; break;
-            case "Sale": reserved -= quantity; onHand -= quantity; break;
-            case "Return": onHand += quantity; break;
+            case StockMovementKind.Adjustment: onHand += quantity; break;
+            case StockMovementKind.Reservation: reserved += quantity; break;
+            case StockMovementKind.Release: reserved -= quantity; break;
+            case StockMovementKind.Sale: reserved -= quantity; onHand -= quantity; break;
+            case StockMovementKind.Return: onHand += quantity; break;
         }
         if (onHand < 0 || reserved < 0 || reserved > onHand || onHand > int.MaxValue)
             return HandlerResult.Fail("onHand", "Insufficient stock, or adjustment would invalidate reservations.");
-        context.Data.Create("StockMovement", Commerce.Values(("stock", record.Id), ("kind", Kind), ("quantity", quantity), ("at", context.UtcNow)));
+        context.Data.CreateStockMovement(new() { Stock = record.Id!.Value, Kind = Kind, Quantity = quantity, At = context.UtcNow });
         return HandlerResult.Ok.Set("onHand", (int)onHand).Set("reserved", (int)reserved);
     }
 }
 [KaruContract("Catalogue.AdjustBalance")]
-public sealed class AdjustBalance : BalanceHandler { protected override string Kind => "Adjustment"; }
+public sealed class AdjustBalance : BalanceHandler { protected override StockMovementKind Kind => StockMovementKind.Adjustment; }
 [KaruContract("Catalogue.ReserveBalance")]
-public sealed class ReserveBalance : BalanceHandler { protected override string Kind => "Reservation"; }
+public sealed class ReserveBalance : BalanceHandler { protected override StockMovementKind Kind => StockMovementKind.Reservation; }
 [KaruContract("Catalogue.ReleaseBalance")]
-public sealed class ReleaseBalance : BalanceHandler { protected override string Kind => "Release"; }
+public sealed class ReleaseBalance : BalanceHandler { protected override StockMovementKind Kind => StockMovementKind.Release; }
 [KaruContract("Catalogue.ConsumeBalance")]
-public sealed class ConsumeBalance : BalanceHandler { protected override string Kind => "Sale"; }
+public sealed class ConsumeBalance : BalanceHandler { protected override StockMovementKind Kind => StockMovementKind.Sale; }
 [KaruContract("Catalogue.ReturnBalance")]
-public sealed class ReturnBalance : BalanceHandler { protected override string Kind => "Return"; }
+public sealed class ReturnBalance : BalanceHandler { protected override StockMovementKind Kind => StockMovementKind.Return; }
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Carts
@@ -251,7 +248,7 @@ public sealed class ChangeCart : CommandHandler
 {
     public override HandlerResult Handle(EntityRecord record, EntityRecord input, HandlerContext context)
     {
-        var stored = Commerce.One(context, "CartById", ("cartId", record.Id));
+        var stored = Commerce.One(context.Data.CartById(checked((int)record.Id!.Value))).Record;
         if (Commerce.Is(input, "UpdateCart") && (record.Ref("customer")?.Id != stored.Ref("customer")?.Id || record.Ref("order")?.Id != stored.Ref("order")?.Id))
             return HandlerResult.Fail(null, "Only the lines of a cart can be changed.");
         return HandlerResult.Ok;
@@ -267,16 +264,15 @@ public sealed class PlaceOrder : CommandHandler
 {
     public override HandlerResult Handle(EntityRecord record, EntityRecord input, HandlerContext context)
     {
-        var customer = Commerce.One(context, "Customers.CustomerById", ("customerId", record.Ref("customer")!.Id));
+        var customer = Commerce.One(context.Data.CustomerById(checked((int)record.Ref("customer")!.Id)));
         var lines = record.Children("lines");
         if (lines.Count == 0) return HandlerResult.Fail(null, "The cart is empty.");
-        var tax = TaxRules.For(context, Orders.Country(customer));
+        var tax = TaxRules.For(context, customer.Shipping.Country);
         var priced = Orders.Price(lines.Select(l => Orders.FromCatalogue(context, tax, l.Ref("product")!.Id, l.Get<int>("quantity"))), tax);
-        var orderId = context.Data.Create("Order", Orders.Values(priced, ("owner", record.Get<string>("owner")), ("cartId", Commerce.Id(record.Id!.Value)),
-            ("customer", customer.Id), ("shipping", customer.GetValueObject("shipping")!.ToDictionary()), ("currency", "CHF"),
-            ("placedAt", context.UtcNow), ("expiresAt", context.UtcNow.AddMinutes(30))));
+        var orderId = Orders.Create(context, priced, record.Get<string>("owner"), customer.Id!.Value, customer.Shipping, OrderCurrency.CHF,
+            cartId: Commerce.Id(record.Id!.Value));
         Orders.Reserve(context, orderId, priced.Lines.Select(l => l.Line));
-        context.Data.Run("SealCart", record.Id!.Value);
+        context.Data.SealCart(record.Id!.Value);
         return HandlerResult.Ok.Set("order", orderId);
     }
 }
@@ -309,11 +305,10 @@ public sealed class StartReplacement : CommandHandler
 {
     public override HandlerResult Handle(EntityRecord record, EntityRecord input, HandlerContext context)
     {
-        var tax = TaxRules.For(context, Orders.Country(record));
+        var order = Order.Wrap(record);
+        var tax = TaxRules.For(context, order.Shipping.Country);
         var priced = Orders.Price(record.Children("lines").Select(l => Orders.FromLine(l, tax, keepId: false)), tax);
-        var replacement = context.Data.Create("Order", Orders.Values(priced, ("owner", record.Get<string>("owner")),
-            ("customer", record.Ref("customer")), ("shipping", record.GetValueObject("shipping")!.ToDictionary()), ("currency", record.Get<string>("currency")),
-            ("placedAt", context.UtcNow), ("expiresAt", context.UtcNow.AddMinutes(30)), ("replaces", record.Id)));
+        var replacement = Orders.Create(context, priced, order.Owner, order.Customer.Id, order.Shipping, order.Currency, replaces: order.Id);
         Orders.Reserve(context, replacement, priced.Lines.Select(l => l.Line));
         return HandlerResult.Ok.Set("replacement", replacement);
     }
@@ -336,9 +331,9 @@ public sealed class TakePayment : CommandHandler
         }
         catch (PortException) { outcome = "TimedOut"; }
         if (outcome is not ("Succeeded" or "Declined" or "TimedOut")) return HandlerResult.Fail(null, "The payment adapter returned an unsupported outcome.");
-        context.Data.Create("PaymentAttempt", Commerce.Values(("order", record.Id), ("attemptKey", key), ("kind", "Charge"), ("amount", amount),
-            ("outcome", outcome), ("reference", reference), ("at", context.UtcNow)));
-        if (outcome == "Succeeded") context.Data.Run("ConfirmOrder", record.Id!.Value);
+        context.Data.CreatePaymentAttempt(new() { Order = record.Id!.Value, AttemptKey = key, Kind = PaymentAttemptKind.Charge, Amount = amount,
+            Outcome = Enum.Parse<PaymentAttemptOutcome>(outcome), Reference = reference, At = context.UtcNow });
+        if (outcome == "Succeeded") context.Data.ConfirmOrder(record.Id!.Value);
         return HandlerResult.Ok;
     }
 }
@@ -350,17 +345,17 @@ public abstract class ReservationHandler : CommandHandler
     public override HandlerResult Handle(EntityRecord record, EntityRecord input, HandlerContext context)
     {
         if (Expire && context.UtcNow < record.Get<DateTime>("expiresAt")) return HandlerResult.Fail(null, "The payment window is still open.");
-        var reservations = Commerce.All(context, "HeldReservations", ("orderId", record.Id));
-        foreach (var reservation in reservations)
+        if (!Consume) Orders.Release(context, record.Id!.Value);
+        else foreach (var reservation in context.Data.HeldReservations(record.Id!.Value))
         {
-            context.Data.Run(Consume ? "Catalogue.ConsumeStock" : "Catalogue.ReleaseStock", reservation.Ref("stock")!.Id, Commerce.Values(("quantity", reservation.Get<int>("quantity"))));
-            context.Data.Run(Consume ? "ConsumeReservation" : "ReleaseReservation", reservation.Id!.Value);
+            context.Data.ConsumeStock(reservation.Stock.Id, new() { Quantity = reservation.Quantity });
+            context.Data.ConsumeReservation(reservation.Id!.Value);
         }
         if (record.Ref("replaces") is { } original)
         {
             // A paid replacement supersedes its original; a cancelled or expired one frees the original for another try.
-            if (Consume) context.Data.Run("SupersedeOrder", original.Id);
-            else context.Data.Run("UnlinkReplacement", original.Id, Commerce.Values(("replacement", record.Id)));
+            if (Consume) context.Data.SupersedeOrder(original.Id);
+            else context.Data.UnlinkReplacement(original.Id, new() { Replacement = record.Id!.Value });
         }
         return HandlerResult.Ok;
     }
@@ -385,10 +380,10 @@ public abstract class RefundHandler : CommandHandler
 {
     public override HandlerResult Handle(EntityRecord record, EntityRecord input, HandlerContext context)
     {
-        foreach (var reservation in Commerce.All(context, "ConsumedReservations", ("orderId", record.Id)))
-            context.Data.Run("Catalogue.ReturnStock", reservation.Ref("stock")!.Id, Commerce.Values(("quantity", reservation.Get<int>("quantity"))));
+        foreach (var reservation in context.Data.ConsumedReservations(record.Id!.Value))
+            context.Data.ReturnStock(reservation.Stock.Id, new() { Quantity = reservation.Quantity });
         var key = $"refund:{record.Id}";
-        if (Commerce.All(context, "PaymentByKey", ("key", key)).Count != 0) return HandlerResult.Ok;
+        if (context.Data.PaymentByKey(key).Count != 0) return HandlerResult.Ok;
         var amount = record.Get<decimal>("total");
         string? reference;
         try
@@ -398,8 +393,8 @@ public abstract class RefundHandler : CommandHandler
             reference = answer.Get<string?>("reference");
         }
         catch (PortException) { return HandlerResult.Fail(null, "Refund unavailable, try again."); }
-        context.Data.Create("PaymentAttempt", Commerce.Values(("order", record.Id), ("attemptKey", key), ("kind", "Refund"), ("amount", amount),
-            ("outcome", "Succeeded"), ("reference", reference), ("at", context.UtcNow)));
+        context.Data.CreatePaymentAttempt(new() { Order = record.Id!.Value, AttemptKey = key, Kind = PaymentAttemptKind.Refund, Amount = amount,
+            Outcome = PaymentAttemptOutcome.Succeeded, Reference = reference, At = context.UtcNow });
         return HandlerResult.Ok;
     }
 }
